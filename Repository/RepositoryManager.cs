@@ -1,0 +1,39 @@
+﻿using Contracts;
+using Entities.Identity;
+using Microsoft.AspNetCore.Identity;
+
+namespace Repository
+{
+    public sealed class RepositoryManager : IRepositoryManager
+    {
+        private readonly RepositoryContext _repositoryContext;
+        private readonly Lazy<ICategoryRepository> _categoryRepository;
+        private readonly Lazy<IPermissionRepository> _permissionRepository;
+        private readonly Lazy<IRolePermissionRepository> _rolePermissionRepository;
+        private readonly Lazy<IAuditRepository> _auditRepository;
+        private readonly Lazy<IUserCalendarRepository> _userCalendarRepository;
+        private readonly Lazy<ISheetOrderRepository> _sheetOrderRepository;
+        private readonly Lazy<ICalendarEventRepository> _calendarEventRepository;
+
+        public RepositoryManager(RepositoryContext repositoryContext, RoleManager<UserRole> roleManager)
+        {
+            _repositoryContext = repositoryContext;
+            _categoryRepository = new Lazy<ICategoryRepository>(() => new CategoryRepository(repositoryContext));
+            _permissionRepository = new Lazy<IPermissionRepository>(() => new PermissionRepository(repositoryContext));
+            _rolePermissionRepository = new Lazy<IRolePermissionRepository>(() => new RolePermissionRepository(repositoryContext));
+            _auditRepository = new Lazy<IAuditRepository>(() => new AuditRepository(repositoryContext));
+            _userCalendarRepository = new Lazy<IUserCalendarRepository>(() => new UserCalendarRepository(repositoryContext));
+            _sheetOrderRepository = new Lazy<ISheetOrderRepository>(() => new SheetOrderRepository(repositoryContext));
+            _calendarEventRepository = new Lazy<ICalendarEventRepository>(() => new CalendarEventRepository(repositoryContext));
+        }
+        public IUserCalendarRepository UserCalendar => _userCalendarRepository.Value;
+        public ICategoryRepository Category => _categoryRepository.Value;
+        public IPermissionRepository Permission => _permissionRepository.Value;
+        public IRolePermissionRepository RolePermission => _rolePermissionRepository.Value;
+        public IAuditRepository Audit => _auditRepository.Value;
+        public ISheetOrderRepository SheetOrder => _sheetOrderRepository.Value;
+        public ICalendarEventRepository CalendarEvent => _calendarEventRepository.Value;
+
+        public async Task SaveAsync() => await _repositoryContext.SaveChangesAsync();
+    }
+}

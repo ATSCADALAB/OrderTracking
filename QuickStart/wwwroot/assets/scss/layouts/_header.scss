@@ -1,0 +1,36 @@
+html .topbar {
+  background-color: $toolbar;
+  position: sticky;
+  top: 0;
+  z-index: 9;
+  height: $header-height;
+}
+.flag-icon {
+  width: 24px; /* Kích thước hình ảnh */
+  height: 16px;
+  margin-right: 10px; /* Khoảng cách giữa hình và chữ */
+  object-fit: cover;
+  vertical-align: middle; /* Căn giữa hình */
+}
+
+.mat-menu-item {
+  display: flex;
+  align-items: center; /* Căn giữa chữ và hình theo chiều ngang */
+  padding: 8px 16px; /* Khoảng cách padding trong menu item */
+}
+
+.mat-menu-item span {
+  line-height: 1.5; /* Đảm bảo chữ căn chỉnh thẳng hàng với hình */
+}
+
+.topbar-dd {
+  min-width: 200px !important;
+}
+.topbar-lg {
+  min-width: 100px !important;
+}
+.object-cover {
+  object-fit: cover;
+}
+
+

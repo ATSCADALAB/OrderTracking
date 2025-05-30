@@ -1,0 +1,95 @@
+.sidebarNav {
+  width: $sidenav-desktop;
+  flex-shrink: 0;
+  transition: swift-ease-out(width);
+  position: absolute;
+  overflow-x: hidden;
+  background-color: #0f172a !important;
+}
+
+.branding {
+  padding: 20px;
+}
+
+.sidebar-list {
+  color: #818cf8;
+  &.mdc-list {
+    padding: 0 24px;
+
+    .mdc-list-group__subheader {
+      margin: 12px 0;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      font-weight: 1000;
+      margin-top: 24px;
+    }
+    
+    .menu-list-item:hover {
+      background-color: #2c3344; /* Thay đổi màu nền khi hover */
+      color: $textWhite; /* Màu chữ */
+      transition: background-color 0.3s ease, color 0.3s ease; /* Hiệu ứng chuyển đổi */
+    }
+    .menu-list-item.selected, 
+    .menu-list-item.activeMenu {
+      background-color: #4f46e5; /* Màu nền cho mục được chọn */
+      color: $textWhite; /* Màu chữ */
+      transition: background-color 0.3s ease, color 0.3s ease; /* Hiệu ứng mượt */
+    }
+
+    .menu-list-item {
+      color: $textWhite !important;
+      border-radius: 7px;
+      height: 45px;
+      padding: 8px 10px !important;
+      margin-bottom: 2px;
+      &.twoline {
+        height: 60px;
+        align-items: center;
+      }
+      &:before,
+      &:focus {
+        z-index: -1;
+      }
+
+      &.activeMenu {
+        .mdc-list-item__primary-text {
+          color: $white !important;
+        }
+
+        .mat-mdc-list-item-icon {
+          color: $white !important;
+        }
+      }
+
+      .mdc-list-item__start {
+        margin-right: 14px;
+        margin-left: 0 !important;
+        width: 20px;
+        height: 20px;
+        fill: transparent !important;
+        color: $textWhite;
+      }
+
+      .mdc-list-item__primary-text {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: $textWhite !important;
+      }
+    }
+  }
+}
+
+.flex-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+
+.side-img {
+  margin-top: -5px;
+  width: 60px;
+  height: 40px;
+
+}

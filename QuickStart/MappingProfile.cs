@@ -1,0 +1,52 @@
+﻿using AutoMapper;
+using Entities.Identity;
+using Entities.Models;
+using Shared.DataTransferObjects.AuditLog;
+using Shared.DataTransferObjects.Authentication;
+using Shared.DataTransferObjects.Calendar;
+using Shared.DataTransferObjects.Category;
+using Shared.DataTransferObjects.Permission;
+using Shared.DataTransferObjects.RolePermission;
+using Shared.DataTransferObjects.User;
+using Shared.DataTransferObjects.UserCalendar;
+using Shared.DataTransferObjects.UserRole;
+using Shared.DataTransferObjects.SheetOrder;
+using SheetOrderDto = Shared.DataTransferObjects.SheetOrder.SheetOrderDto;
+using Shared.DataTransferObjects.CalendarEvent;
+namespace QuickStart
+{
+    public class MappingProfile : Profile
+    {
+        public MappingProfile()
+        {
+            CreateMap<UserCalendarForCreationDto, UserCalendar>();
+            CreateMap<CalendarEvent, CalendarEventDto>();
+            CreateMap<CalendarEventDto, CalendarEvent>();
+            CreateMap<SheetOrderDto, SheetOrder>();
+            CreateMap<SheetOrder, SheetOrderDto>();
+            CreateMap<UserCalendar, UserCalendarDto>()
+    .ForMember(dest => dest.UserName, opt => opt.MapFrom(src => src.User.FirstName +" "+src.User.LastName));
+            CreateMap<RolePermission, RolePermissionDto>();
+            CreateMap<RolePermission, RolePermissionForCreationDto>();
+            CreateMap<RolePermissionForCreationDto, RolePermission>();
+            CreateMap<RolePermissionForUpdateDto, RolePermission>();
+            CreateMap<PermissionForCreationDto, Permission>();
+            CreateMap<Permission, PermissionDto>();
+            CreateMap<PermissionForCreationDto, Permission>();
+            CreateMap<PermissionForUpdateDto, Permission>();
+            CreateMap<Category, CategoryDto>();
+            CreateMap<CategoryForCreationDto, Category>();
+            CreateMap<CategoryForUpdateDto, Category>();
+            CreateMap<UserForRegistrationDto, User>();
+            CreateMap<User, UserDto>();
+            CreateMap<UserRole, UserRoleDto>();
+            CreateMap<UserForUpdateDto, User>();
+            CreateMap<UserRoleForCreationDto, UserRole>();
+            CreateMap<UserRoleForUpdateDto, UserRole>();
+            CreateMap<AuditLog, AuditLogDto>();
+            CreateMap<RolePermission, RoleMapPermissionDto>()
+                .ForMember(dest => dest.PermissionName, opt => opt.MapFrom(src => src.Permission.Name))
+                .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category.Name));
+        }
+    }
+}
