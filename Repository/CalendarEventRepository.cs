@@ -10,6 +10,11 @@ namespace Repository
         public CalendarEventRepository(RepositoryContext repositoryContext) : base(repositoryContext)
         {
         }
+        public async Task<IEnumerable<CalendarEvent>> GetEventsByDateRangeAsync(DateTime startDate, DateTime endDate)
+        {
+            return await FindByCondition(x => x.StartDate >= startDate && x.StartDate < endDate, false)
+                .ToListAsync();
+        }
         public async Task<CalendarEvent?> GetByOrderCodeAsync(string orderCode)
         {
             if (string.IsNullOrWhiteSpace(orderCode))

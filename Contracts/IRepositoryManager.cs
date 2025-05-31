@@ -9,6 +9,7 @@
         IUserCalendarRepository UserCalendar { get; }
         ISheetOrderRepository SheetOrder { get; }
         ICalendarEventRepository CalendarEvent { get; }
+        ISendMailRepository SendMail { get; }
         Task SaveAsync();
     }
 }

@@ -39,7 +39,8 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.SuppressModelStateInvalidFilter = true;
 });
-
+builder.Services.AddHttpClient<ISendMailService, SendMailService>();
+builder.Services.AddHostedService<SendMailBackgroundService>();
 builder.Services.AddScoped<ValidationFilterAttribute>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();

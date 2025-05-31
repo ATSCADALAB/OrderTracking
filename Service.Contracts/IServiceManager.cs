@@ -15,5 +15,6 @@
         ICalendarReportService CalendarReportService { get; }
         ISheetOrderService SheetOrderService { get; }
         ICalendarEventService CalendarEventService { get; }
+        ISendMailService SendMailService { get; }
     }
 }

@@ -14,7 +14,7 @@ namespace Repository
         private readonly Lazy<IUserCalendarRepository> _userCalendarRepository;
         private readonly Lazy<ISheetOrderRepository> _sheetOrderRepository;
         private readonly Lazy<ICalendarEventRepository> _calendarEventRepository;
-
+        private readonly Lazy<ISendMailRepository> _sendMailRepository;
         public RepositoryManager(RepositoryContext repositoryContext, RoleManager<UserRole> roleManager)
         {
             _repositoryContext = repositoryContext;
@@ -25,6 +25,7 @@ namespace Repository
             _userCalendarRepository = new Lazy<IUserCalendarRepository>(() => new UserCalendarRepository(repositoryContext));
             _sheetOrderRepository = new Lazy<ISheetOrderRepository>(() => new SheetOrderRepository(repositoryContext));
             _calendarEventRepository = new Lazy<ICalendarEventRepository>(() => new CalendarEventRepository(repositoryContext));
+            _sendMailRepository = new Lazy<ISendMailRepository>(() => new SendMailRepository(repositoryContext));
         }
         public IUserCalendarRepository UserCalendar => _userCalendarRepository.Value;
         public ICategoryRepository Category => _categoryRepository.Value;
@@ -33,6 +34,7 @@ namespace Repository
         public IAuditRepository Audit => _auditRepository.Value;
         public ISheetOrderRepository SheetOrder => _sheetOrderRepository.Value;
         public ICalendarEventRepository CalendarEvent => _calendarEventRepository.Value;
+        public ISendMailRepository SendMail => _sendMailRepository.Value;
 
         public async Task SaveAsync() => await _repositoryContext.SaveChangesAsync();
     }

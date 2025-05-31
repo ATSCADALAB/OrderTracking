@@ -11,6 +11,7 @@ using QuickStart.Hubs; // Thêm để dùng DataHub
 using QuickStart.Service;
 using Service.Contracts;
 using Service.JwtFeatures;
+using System.Net.Http;
 
 namespace Service
 {
@@ -29,6 +30,7 @@ namespace Service
         private readonly Lazy<ICalendarReportService> _calendarReportService;
         private readonly Lazy<ISheetOrderService> _sheetOrderService;
         private readonly Lazy<ICalendarEventService> _calendarEventService;
+        private readonly Lazy<ISendMailService> _sendMailService;
         public ServiceManager(
             IRepositoryManager repositoryManager,
             ILoggerManager logger,
@@ -38,7 +40,7 @@ namespace Service
             RoleManager<UserRole> roleManager,
             JwtHandler jwtHandler,
             IEmailSender emailSender,
-            IHubContext<DataHub> hubContext, IWebHostEnvironment evn) // Thêm IHubContext<DataHub>
+            IHubContext<DataHub> hubContext, IWebHostEnvironment evn, HttpClient httpClient) // Thêm IHubContext<DataHub>
         {
             _authorization1Service = new Lazy<IAuthorizationServiceLocal>(() => new AuthorizationService(userManager, repositoryManager, logger));
             _categoryRepository = new Lazy<ICategoryService>(() => new CategoryService(repositoryManager, logger, mapper));
@@ -54,6 +56,7 @@ namespace Service
             _calendarReportService = new Lazy<ICalendarReportService>(() => new CalendarReportService(repositoryManager, logger, mapper,evn));
             _sheetOrderService = new Lazy<ISheetOrderService>(() => new SheetOrderService(repositoryManager, mapper));
             _calendarEventService = new Lazy<ICalendarEventService>(() => new CalendarEventService(repositoryManager, mapper));
+            _sendMailService = new Lazy<ISendMailService>(() => new SendMailService(repositoryManager, logger, emailSender, httpClient));
         }
 
         public IWcfService WcfService => _wcfService.Value;
@@ -69,5 +72,6 @@ namespace Service
         public ICalendarReportService CalendarReportService => _calendarReportService.Value;
         public ISheetOrderService SheetOrderService => _sheetOrderService.Value;
         public ICalendarEventService CalendarEventService => _calendarEventService.Value;
+        public ISendMailService SendMailService => _sendMailService.Value;
     }
 }

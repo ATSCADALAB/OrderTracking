@@ -82,7 +82,7 @@ namespace Repository
         public DbSet<UserCalendar> UserCalendar { get; set; } = default!;
         public DbSet<SheetOrder> SheetOrders { get; set; } = default!;
         public DbSet<CalendarEvent> CalendarEvents { get; set; } = default!;
-
+        public DbSet<SendMail> SendMails { get; set; } = default!;
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
