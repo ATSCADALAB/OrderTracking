@@ -20,6 +20,7 @@ using Shared.DataTransferObjects.Calendar;
 using Color = Google.Apis.Sheets.v4.Data.Color;
 using Microsoft.Extensions.Caching.Memory;
 using Entities.Models;
+using Microsoft.Extensions.FileSystemGlobbing.Internal;
 
 namespace Service
 {
@@ -589,7 +590,6 @@ namespace Service
                 "Holidays in Vietnam", "soft@atpro.com.vn"
             };
 
-            var qcPattern = new Regex(@"-\s*(\d{2}/\d{2}/\d{4}):\s*QC\b.*?\[[Vv]\]", RegexOptions.Compiled);
             var calendars = service.CalendarList.List().Execute().Items;
 
             foreach (var cal in calendars)
@@ -610,8 +610,8 @@ namespace Service
                 req.MaxResults = 500;
 
                 var events = req.Execute().Items
-                    .Where(e => !string.IsNullOrEmpty(e.Summary) && e.Summary.StartsWith("DH", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+    .Where(e => !string.IsNullOrEmpty(e.Summary))
+    .ToList();
                 var orders = new List<CalendarReport>();
                 foreach (var ev in events)
                 {
@@ -619,11 +619,10 @@ namespace Service
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
 
-                    var matches = qcPattern.Matches(desc).Cast<Match>().ToList();
-                    if (!matches.Any()) continue;
+                    var lastTimelineDate = GetLastTimelineDate(desc);
+                    if (lastTimelineDate == null) continue;
 
-                    var qcDate = matches.Select(m => DateTime.ParseExact(m.Groups[1].Value, "dd/MM/yyyy", null))
-                                        .OrderBy(d => d).Last();
+                    var qcDate = lastTimelineDate.Value;
 
                     int delta = (qcDate - evEnd).Days;
                     int stars = delta < 0 ? 5 : delta == 0 ? 4 : delta == 1 ? 3 : delta == 2 ? 2 : 1;
@@ -669,7 +668,27 @@ namespace Service
 
             return result;
         }
+        private DateTime? GetLastTimelineDate(string description)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+                return null;
 
+            try
+            {
+                // Parse timeline từ description
+                var timelineSteps = ParseTimelineFromDescription(description);
+
+                if (!timelineSteps.Any())
+                    return null;
+
+                // Lấy ngày cuối cùng trong timeline
+                return timelineSteps.OrderByDescending(t => t.Date).First().Date;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
         public async Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate)
         {
             var userCalendar = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
@@ -697,7 +716,6 @@ namespace Service
                 "Holidays in Vietnam", "soft@atpro.com.vn"
             };
 
-            var qcPattern = new Regex(@"-\s*(\d{2}/\d{2}/\d{4}):\s*QC\b.*?\[[Vv]\]", RegexOptions.Compiled);
             var workbook = new XLWorkbook();
             var calendars = service.CalendarList.List().Execute().Items;
 
@@ -714,8 +732,8 @@ namespace Service
                 req.MaxResults = 500;
 
                 var events = req.Execute().Items
-                    .Where(e => !string.IsNullOrEmpty(e.Summary) && e.Summary.StartsWith("DH", StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+    .Where(e => !string.IsNullOrEmpty(e.Summary))
+    .ToList();
                 if (!events.Any()) continue;
 
                 var orders = new List<CalendarReport>();
@@ -725,11 +743,10 @@ namespace Service
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
 
-                    var matches = qcPattern.Matches(desc).Cast<Match>().ToList();
-                    if (!matches.Any()) continue;
+                    var lastTimelineDate = GetLastTimelineDate(desc);
+                    if (lastTimelineDate == null) continue;
 
-                    var qcDate = matches.Select(m => DateTime.ParseExact(m.Groups[1].Value, "dd/MM/yyyy", null))
-                                        .OrderBy(d => d).Last();
+                    var qcDate = lastTimelineDate.Value;
 
                     int delta = (qcDate - evEnd).Days;
                     int stars = delta < 0 ? 5 : delta == 0 ? 4 : delta == 1 ? 3 : delta == 2 ? 2 : 1;

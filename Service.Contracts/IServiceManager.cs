@@ -15,6 +15,7 @@
         ICalendarReportService CalendarReportService { get; }
         ISheetOrderService SheetOrderService { get; }
         ICalendarEventService CalendarEventService { get; }
+        IKpiConfigurationService KpiConfigurationService { get; }
         ISendMailService SendMailService { get; }
     }
 }

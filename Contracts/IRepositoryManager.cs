@@ -10,6 +10,7 @@
         ISheetOrderRepository SheetOrder { get; }
         ICalendarEventRepository CalendarEvent { get; }
         ISendMailRepository SendMail { get; }
+        IKpiConfigurationRepository KpiConfiguration { get; }
         Task SaveAsync();
     }
 }
