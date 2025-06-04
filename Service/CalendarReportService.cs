@@ -563,6 +563,11 @@ namespace Service
 
         public async Task<IEnumerable<CalendarUserKpiDto>> GetUserKpiReportAsync(DateTime startDate, DateTime endDate)
         {
+            // Lấy KPI configuration
+            var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
+            if (kpiConfig == null)
+                throw new Exception("No active KPI configuration found");
+
             var userCalendarList = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
             var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendarList);
 
@@ -585,10 +590,10 @@ namespace Service
             });
 
             var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "TIMELINE - XƯỞNG", "Tasks", "Sinh nhật", "ATSCADA SOFT",
-                "Holidays in Vietnam", "soft@atpro.com.vn"
-            };
+    {
+        "TIMELINE - XƯỞNG", "Tasks", "Sinh nhật", "ATSCADA SOFT",
+        "Holidays in Vietnam", "soft@atpro.com.vn"
+    };
 
             var calendars = service.CalendarList.List().Execute().Items;
 
@@ -610,8 +615,9 @@ namespace Service
                 req.MaxResults = 500;
 
                 var events = req.Execute().Items
-    .Where(e => !string.IsNullOrEmpty(e.Summary))
-    .ToList();
+                    .Where(e => !string.IsNullOrEmpty(e.Summary))
+                    .ToList();
+
                 var orders = new List<CalendarReport>();
                 foreach (var ev in events)
                 {
@@ -625,7 +631,9 @@ namespace Service
                     var qcDate = lastTimelineDate.Value;
 
                     int delta = (qcDate - evEnd).Days;
-                    int stars = delta < 0 ? 5 : delta == 0 ? 4 : delta == 1 ? 3 : delta == 2 ? 2 : 1;
+
+                    // SỬ DỤNG KPI CONFIG THAY VÌ HARDCODE
+                    int stars = CalculateStarsFromConfig(delta, kpiConfig);
                     int days = (qcDate - evStart).Days;
 
                     orders.Add(new CalendarReport
@@ -642,18 +650,17 @@ namespace Service
                 if (!orders.Any()) continue;
 
                 double avgStars = orders.Average(o => o.Stars);
-                int small = orders.Count(o => o.EventDays < 10);
-                int medium = orders.Count(o => o.EventDays >= 10 && o.EventDays < 20);
-                int large = orders.Count(o => o.EventDays >= 20);
-                double hssl = Math.Max(small - 10, 0) * 0.1 + medium + large * 2;
 
-                double reward = 0;
-                if (avgStars >= 3.4 && avgStars <= 5)
-                    reward = ((avgStars - 3) * 2500000 / 2 - 500000) * hssl;
-                else if (avgStars < 3.4 && avgStars >= 3)
-                    reward = (avgStars - 3) * 2500000 / 2 - 500000;
-                else if (avgStars < 3 && avgStars >= 1)
-                    reward = (avgStars - 1) * 500000 / 2 - 1000000;
+                // SỬ DỤNG KPI CONFIG ĐỂ PHÂN LOẠI ĐƠN HÀNG
+                var orderDays = orders.Select(o => o.EventDays).ToList();
+                var (small, medium, large) = CategorizeOrdersFromConfig(orderDays, kpiConfig);
+
+                // SỬ DỤNG KPI CONFIG ĐỂ TÍNH HSSL
+                double hssl = CalculateHSSLFromConfig(small, medium, large, kpiConfig);
+
+                // SỬ DỤNG KPI CONFIG ĐỂ TÍNH THƯỞNG/PHẠT (giả sử không có lỗi)
+                double penalty = (double)kpiConfig.Penalty_NoError; // 0
+                double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
 
                 result.Add(new CalendarUserKpiDto
                 {
@@ -691,8 +698,14 @@ namespace Service
         }
         public async Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate)
         {
+            // Lấy KPI configuration
+            var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
+            if (kpiConfig == null)
+                throw new Exception("No active KPI configuration found");
+
             var userCalendar = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
             var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendar);
+
             UserCredential credential;
             using (var stream = new FileStream(Path.Combine(_googleAuthPath, "credentials.json"), FileMode.Open, FileAccess.Read))
             {
@@ -711,10 +724,10 @@ namespace Service
             });
 
             var excluded = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            {
-                "TIMELINE - XƯỞNG", "Tasks", "Sinh nhật", "ATSCADA SOFT",
-                "Holidays in Vietnam", "soft@atpro.com.vn"
-            };
+    {
+        "TIMELINE - XƯỞNG", "Tasks", "Sinh nhật", "ATSCADA SOFT",
+        "Holidays in Vietnam", "soft@atpro.com.vn"
+    };
 
             var workbook = new XLWorkbook();
             var calendars = service.CalendarList.List().Execute().Items;
@@ -732,8 +745,8 @@ namespace Service
                 req.MaxResults = 500;
 
                 var events = req.Execute().Items
-    .Where(e => !string.IsNullOrEmpty(e.Summary))
-    .ToList();
+                    .Where(e => !string.IsNullOrEmpty(e.Summary))
+                    .ToList();
                 if (!events.Any()) continue;
 
                 var orders = new List<CalendarReport>();
@@ -749,7 +762,9 @@ namespace Service
                     var qcDate = lastTimelineDate.Value;
 
                     int delta = (qcDate - evEnd).Days;
-                    int stars = delta < 0 ? 5 : delta == 0 ? 4 : delta == 1 ? 3 : delta == 2 ? 2 : 1;
+
+                    // SỬ DỤNG KPI CONFIG
+                    int stars = CalculateStarsFromConfig(delta, kpiConfig);
                     int days = (qcDate - evStart).Days;
 
                     orders.Add(new CalendarReport
@@ -766,18 +781,14 @@ namespace Service
                 if (!orders.Any()) continue;
 
                 double avgStars = orders.Average(o => o.Stars);
-                int sln = orders.Count(o => o.EventDays < 10);
-                int slv = orders.Count(o => o.EventDays >= 10 && o.EventDays < 20);
-                int sll = orders.Count(o => o.EventDays >= 20);
-                double hssl = Math.Max(sln - 10, 0) * 0.1 + slv + sll * 2;
 
-                double reward = 0;
-                if (avgStars >= 3.4 && avgStars <= 5)
-                    reward = ((avgStars - 3) * 2500000 / 2 - 500000) * hssl;
-                else if (avgStars < 3.4 && avgStars >= 3)
-                    reward = (avgStars - 3) * 2500000 / 2 - 500000;
-                else if (avgStars < 3 && avgStars >= 1)
-                    reward = (avgStars - 1) * 500000 / 2 - 1000000;
+                // SỬ DỤNG KPI CONFIG
+                var orderDays = orders.Select(o => o.EventDays).ToList();
+                var (sln, slv, sll) = CategorizeOrdersFromConfig(orderDays, kpiConfig);
+                double hssl = CalculateHSSLFromConfig(sln, slv, sll, kpiConfig);
+
+                double penalty = (double)kpiConfig.Penalty_NoError;
+                double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
 
                 var userCal = userCalendarDto.FirstOrDefault(x => string.Equals(x.Name, cal.Summary, StringComparison.OrdinalIgnoreCase));
                 if (userCal == null) continue;
@@ -788,17 +799,18 @@ namespace Service
 
                 sheet.Cell(1, 1).Value = "Average Stars";
                 sheet.Cell(1, 2).Value = Math.Round(avgStars, 2);
-                sheet.Cell(2, 1).Value = "Small (<10 days)";
+                sheet.Cell(2, 1).Value = $"Small (<{kpiConfig.LightOrder_MaxDays} days)";
                 sheet.Cell(2, 2).Value = sln;
-                sheet.Cell(3, 1).Value = "Medium (10-19 days)";
+                sheet.Cell(3, 1).Value = $"Medium ({kpiConfig.MediumOrder_MinDays}-{kpiConfig.MediumOrder_MaxDays} days)";
                 sheet.Cell(3, 2).Value = slv;
-                sheet.Cell(4, 1).Value = "Large (>=20 days)";
+                sheet.Cell(4, 1).Value = $"Large (>={kpiConfig.HeavyOrder_MinDays} days)";
                 sheet.Cell(4, 2).Value = sll;
                 sheet.Cell(5, 1).Value = "HSSL";
                 sheet.Cell(5, 2).Value = Math.Round(hssl, 2);
                 sheet.Cell(6, 1).Value = "Bonus/Penalty";
                 sheet.Cell(6, 2).Value = Math.Round(reward, 2);
 
+                // Tiếp tục với việc format sheet...
                 sheet.Cell(8, 1).Value = "Title";
                 sheet.Cell(8, 2).Value = "Start";
                 sheet.Cell(8, 3).Value = "End";
@@ -818,6 +830,7 @@ namespace Service
                     row++;
                 }
 
+                // Format Excel như cũ...
                 sheet.Columns().AdjustToContents();
                 var summaryRange = sheet.Range("A1:B6");
                 summaryRange.Style.Fill.BackgroundColor = XLColor.LightGray;
@@ -843,9 +856,6 @@ namespace Service
 
                 var titleRange = sheet.Range($"A9:A{lastRow}");
                 titleRange.Style.Fill.BackgroundColor = XLColor.LightCyan;
-
-                starsRange.AddConditionalFormat().WhenGreaterThan(4).Fill.SetBackgroundColor(XLColor.LightGreen);
-                starsRange.AddConditionalFormat().WhenLessThan(3).Fill.SetBackgroundColor(XLColor.LightCoral);
             }
 
             using var ms = new MemoryStream();
@@ -1328,7 +1338,58 @@ namespace Service
         #endregion
 
         #region Helper Methods
+        private double CalculateRewardFromConfig(decimal averageStars, decimal hssl, decimal penalty, KpiConfiguration config)
+        {
+            decimal reward = 0;
 
+            if (averageStars >= config.Reward_HighPerformance_MinStars && averageStars <= config.Reward_HighPerformance_MaxStars)
+            {
+                // Công thức thưởng: (TD-3)*2500000/2-500000 – PB * HSSL
+                reward = ((averageStars - config.Penalty_MediumPerformance_MinStars) * config.Reward_BaseAmount / 2 - config.Reward_BasePenalty - penalty) * hssl;
+            }
+            else if (averageStars >= config.Penalty_MediumPerformance_MinStars && averageStars < config.Penalty_MediumPerformance_MaxStars)
+            {
+                // Công thức phạt nhẹ: (TD-3)*2500000/2-500000 + PB
+                reward = (averageStars - config.Penalty_MediumPerformance_MinStars) * config.Reward_BaseAmount / 2 - config.Reward_BasePenalty + penalty;
+            }
+            else if (averageStars >= config.Penalty_LowPerformance_MinStars && averageStars < config.Penalty_LowPerformance_MaxStars)
+            {
+                // Công thức phạt nặng: (TD-1)*500000/2-1000000 + PB
+                reward = (averageStars - config.Penalty_LowPerformance_MinStars) * config.Penalty_LowPerformance_BaseAmount / 2 - config.Penalty_LowPerformance_MaxPenalty + penalty;
+            }
+
+            return (double)reward;
+        }
+        private double CalculateHSSLFromConfig(int lightOrders, int mediumOrders, int heavyOrders, KpiConfiguration config)
+        {
+            // HSSL = [MAX(SLn – FreeCount, 0)] * LightMultiplier + SLv * MediumMultiplier + SLl * HeavyMultiplier
+            var excessLightOrders = Math.Max(lightOrders - config.HSSL_LightOrderFreeCount, 0);
+            var hssl = excessLightOrders * (double)config.HSSL_LightOrderMultiplier +
+                      mediumOrders * (double)config.HSSL_MediumOrderMultiplier +
+                      heavyOrders * (double)config.HSSL_HeavyOrderMultiplier;
+
+            return hssl;
+        }
+
+        private (int light, int medium, int heavy) CategorizeOrdersFromConfig(List<int> orderDays, KpiConfiguration config)
+        {
+            var light = orderDays.Count(days => days < config.LightOrder_MaxDays);
+            var medium = orderDays.Count(days => days >= config.MediumOrder_MinDays && days <= config.MediumOrder_MaxDays);
+            var heavy = orderDays.Count(days => days >= config.HeavyOrder_MinDays);
+
+            return (light, medium, heavy);
+        }
+        private int CalculateStarsFromConfig(int daysLate, KpiConfiguration config)
+        {
+            return daysLate switch
+            {
+                < 0 => config.Stars_EarlyCompletion,  // Hoàn thành sớm
+                0 => config.Stars_OnTime,             // Đúng hạn
+                1 => config.Stars_Late1Day,           // Trễ 1 ngày
+                2 => config.Stars_Late2Days,          // Trễ 2 ngày
+                _ => config.Stars_Late3OrMoreDays     // Trễ 3+ ngày
+            };
+        }
         // Phương thức helper để chuẩn hóa HTML content
         private string CleanHtmlContent(string htmlContent)
         {
