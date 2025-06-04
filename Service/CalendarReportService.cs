@@ -619,6 +619,8 @@ namespace Service
                     .ToList();
 
                 var orders = new List<CalendarReport>();
+                decimal totalPenalty = 0; // Tổng penalty cho user này
+
                 foreach (var ev in events)
                 {
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
@@ -629,12 +631,15 @@ namespace Service
                     if (lastTimelineDate == null) continue;
 
                     var qcDate = lastTimelineDate.Value;
-
                     int delta = (qcDate - evEnd).Days;
 
                     // SỬ DỤNG KPI CONFIG THAY VÌ HARDCODE
                     int stars = CalculateStarsFromConfig(delta, kpiConfig);
                     int days = (qcDate - evStart).Days;
+
+                    // THÊM LOGIC ĐỌC PB TỪ DESCRIPTION
+                    decimal eventPenalty = ExtractPenaltyFromDescription(ev.Description ?? "", kpiConfig);
+                    totalPenalty += eventPenalty;
 
                     orders.Add(new CalendarReport
                     {
@@ -658,8 +663,8 @@ namespace Service
                 // SỬ DỤNG KPI CONFIG ĐỂ TÍNH HSSL
                 double hssl = CalculateHSSLFromConfig(small, medium, large, kpiConfig);
 
-                // SỬ DỤNG KPI CONFIG ĐỂ TÍNH THƯỞNG/PHẠT (giả sử không có lỗi)
-                double penalty = (double)kpiConfig.Penalty_NoError; // 0
+                // SỬ DỤNG PENALTY THỰC TẾ TỪ PB THAY VÌ MẶC ĐỊNH
+                double penalty = (double)totalPenalty; // Sử dụng tổng penalty từ tất cả events
                 double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
 
                 result.Add(new CalendarUserKpiDto
@@ -750,6 +755,8 @@ namespace Service
                 if (!events.Any()) continue;
 
                 var orders = new List<CalendarReport>();
+                decimal totalPenalty = 0; // Tổng penalty cho calendar này
+
                 foreach (var ev in events)
                 {
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
@@ -760,12 +767,15 @@ namespace Service
                     if (lastTimelineDate == null) continue;
 
                     var qcDate = lastTimelineDate.Value;
-
                     int delta = (qcDate - evEnd).Days;
 
                     // SỬ DỤNG KPI CONFIG
                     int stars = CalculateStarsFromConfig(delta, kpiConfig);
                     int days = (qcDate - evStart).Days;
+
+                    // THÊM LOGIC ĐỌC PB TỪ DESCRIPTION
+                    decimal eventPenalty = ExtractPenaltyFromDescription(ev.Description ?? "", kpiConfig);
+                    totalPenalty += eventPenalty;
 
                     orders.Add(new CalendarReport
                     {
@@ -787,7 +797,8 @@ namespace Service
                 var (sln, slv, sll) = CategorizeOrdersFromConfig(orderDays, kpiConfig);
                 double hssl = CalculateHSSLFromConfig(sln, slv, sll, kpiConfig);
 
-                double penalty = (double)kpiConfig.Penalty_NoError;
+                // SỬ DỤNG PENALTY THỰC TẾ TỪ PB THAY VÌ MẶC ĐỊNH
+                double penalty = (double)totalPenalty; // Sử dụng tổng penalty từ tất cả events
                 double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
 
                 var userCal = userCalendarDto.FirstOrDefault(x => string.Equals(x.Name, cal.Summary, StringComparison.OrdinalIgnoreCase));
@@ -807,18 +818,20 @@ namespace Service
                 sheet.Cell(4, 2).Value = sll;
                 sheet.Cell(5, 1).Value = "HSSL";
                 sheet.Cell(5, 2).Value = Math.Round(hssl, 2);
-                sheet.Cell(6, 1).Value = "Bonus/Penalty";
-                sheet.Cell(6, 2).Value = Math.Round(reward, 2);
+                sheet.Cell(6, 1).Value = "Total Penalty (PB)";
+                sheet.Cell(6, 2).Value = Math.Round(penalty, 2);
+                sheet.Cell(7, 1).Value = "Bonus/Penalty";
+                sheet.Cell(7, 2).Value = Math.Round(reward, 2);
 
                 // Tiếp tục với việc format sheet...
-                sheet.Cell(8, 1).Value = "Title";
-                sheet.Cell(8, 2).Value = "Start";
-                sheet.Cell(8, 3).Value = "End";
-                sheet.Cell(8, 4).Value = "QCDay";
-                sheet.Cell(8, 5).Value = "Days";
-                sheet.Cell(8, 6).Value = "Stars";
+                sheet.Cell(9, 1).Value = "Title";
+                sheet.Cell(9, 2).Value = "Start";
+                sheet.Cell(9, 3).Value = "End";
+                sheet.Cell(9, 4).Value = "QCDay";
+                sheet.Cell(9, 5).Value = "Days";
+                sheet.Cell(9, 6).Value = "Stars";
 
-                int row = 9;
+                int row = 10;
                 foreach (var o in orders)
                 {
                     sheet.Cell(row, 1).Value = o.Title;
@@ -832,13 +845,13 @@ namespace Service
 
                 // Format Excel như cũ...
                 sheet.Columns().AdjustToContents();
-                var summaryRange = sheet.Range("A1:B6");
+                var summaryRange = sheet.Range("A1:B7"); // Thay đổi từ B6 thành B7 để bao gồm Total Penalty
                 summaryRange.Style.Fill.BackgroundColor = XLColor.LightGray;
                 summaryRange.Style.Font.Bold = true;
                 summaryRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 summaryRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
-                var headerRange = sheet.Range("A8:F8");
+                var headerRange = sheet.Range("A9:F9"); // Thay đổi từ A8 thành A9
                 headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
                 headerRange.Style.Font.Bold = true;
                 headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -846,15 +859,15 @@ namespace Service
                 headerRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
                 var lastRow = sheet.LastRowUsed().RowNumber();
-                var tableRange = sheet.Range($"A8:F{lastRow}");
+                var tableRange = sheet.Range($"A9:F{lastRow}"); // Thay đổi từ A8 thành A9
                 tableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
-                var starsRange = sheet.Range($"F9:F{lastRow}");
+                var starsRange = sheet.Range($"F10:F{lastRow}"); // Thay đổi từ F9 thành F10
                 starsRange.AddConditionalFormat().WhenGreaterThan(4).Fill.SetBackgroundColor(XLColor.LightGreen);
                 starsRange.AddConditionalFormat().WhenLessThan(3).Fill.SetBackgroundColor(XLColor.LightCoral);
 
-                var titleRange = sheet.Range($"A9:A{lastRow}");
+                var titleRange = sheet.Range($"A10:A{lastRow}"); // Thay đổi từ A9 thành A10
                 titleRange.Style.Fill.BackgroundColor = XLColor.LightCyan;
             }
 
@@ -862,7 +875,6 @@ namespace Service
             workbook.SaveAs(ms);
             return ms.ToArray();
         }
-
         #endregion
 
         #region Authentication Methods
@@ -1502,7 +1514,40 @@ namespace Service
                 return null;
             }
         }
+        private decimal ExtractPenaltyFromDescription(string description, KpiConfiguration kpiConfig)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+                return kpiConfig.Penalty_NoError; // Mặc định không lỗi
 
+            try
+            {
+                // Chuẩn hóa HTML content
+                var plainText = CleanHtmlContent(description);
+
+                // Tìm pattern PB:số
+                var pbPattern = @"PB\s*:\s*(\d+)";
+                var match = Regex.Match(plainText, pbPattern, RegexOptions.IgnoreCase);
+
+                if (match.Success && int.TryParse(match.Groups[1].Value, out int pbValue))
+                {
+                    return pbValue switch
+                    {
+                        100 => kpiConfig.Penalty_LightError,  // Lỗi nhẹ
+                        500 => kpiConfig.Penalty_HeavyError,  // Lỗi nặng
+                        0 => kpiConfig.Penalty_NoError,       // Không lỗi
+                        _ => pbValue >= 500 ? kpiConfig.Penalty_HeavyError : kpiConfig.Penalty_LightError
+                    };
+                }
+
+                // Nếu không tìm thấy PB, mặc định không lỗi
+                return kpiConfig.Penalty_NoError;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error extracting penalty from description: {ex.Message}");
+                return kpiConfig.Penalty_NoError;
+            }
+        }
         // Phương thức fallback để parse timeline step
         private TimelineStep? ParseTimelineStepFallback(string line)
         {
