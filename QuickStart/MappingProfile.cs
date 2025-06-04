@@ -13,6 +13,7 @@ using Shared.DataTransferObjects.UserRole;
 using Shared.DataTransferObjects.SheetOrder;
 using SheetOrderDto = Shared.DataTransferObjects.SheetOrder.SheetOrderDto;
 using Shared.DataTransferObjects.CalendarEvent;
+using Shared.DataTransferObjects.KpiConfiguration;
 namespace QuickStart
 {
     public class MappingProfile : Profile
@@ -47,6 +48,17 @@ namespace QuickStart
             CreateMap<RolePermission, RoleMapPermissionDto>()
                 .ForMember(dest => dest.PermissionName, opt => opt.MapFrom(src => src.Permission.Name))
                 .ForMember(dest => dest.CategoryName, opt => opt.MapFrom(src => src.Category.Name));
+            // KPI Configuration mappings
+            CreateMap<KpiConfiguration, KpiConfigurationDto>();
+            CreateMap<KpiConfigurationForCreationDto, KpiConfiguration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.IsActive, opt => opt.Ignore());
+            CreateMap<KpiConfigurationForUpdateDto, KpiConfiguration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
         }
     }
 }
