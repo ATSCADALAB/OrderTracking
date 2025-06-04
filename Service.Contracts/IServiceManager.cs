@@ -16,6 +16,7 @@
         ISheetOrderService SheetOrderService { get; }
         ICalendarEventService CalendarEventService { get; }
         IKpiConfigurationService KpiConfigurationService { get; }
+        IEventExclusionKeywordService EventExclusionKeywordService { get; }
         ISendMailService SendMailService { get; }
     }
 }

@@ -84,6 +84,7 @@ namespace Repository
         public DbSet<CalendarEvent> CalendarEvents { get; set; } = default!;
         public DbSet<SendMail> SendMails { get; set; } = default!;
         public DbSet<KpiConfiguration> KpiConfigurations { get; set; } = default!;
+        public DbSet<EventExclusionKeyword> EventExclusionKeywords { get; set; } = default!;
 
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {

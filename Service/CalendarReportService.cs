@@ -619,10 +619,17 @@ namespace Service
                     .ToList();
 
                 var orders = new List<CalendarReport>();
-                decimal totalPenalty = 0; // Tổng penalty cho user này
-
+                decimal totalPenalty = 0;
+                var excludedEvents = new List<string>();
                 foreach (var ev in events)
                 {
+                    var shouldExclude = await ShouldExcludeEventAsync(ev.Summary ?? "");
+                    if (shouldExclude)
+                    {
+                        excludedEvents.Add(ev.Summary ?? "Unknown");
+                        _logger.LogInfo($"Excluded event from report: '{ev.Summary}' for calendar: {cal.Summary}");
+                        continue;
+                    }
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
@@ -755,10 +762,18 @@ namespace Service
                 if (!events.Any()) continue;
 
                 var orders = new List<CalendarReport>();
-                decimal totalPenalty = 0; // Tổng penalty cho calendar này
-
+                decimal totalPenalty = 0; 
+                var excludedEvents = new List<string>();
+                
                 foreach (var ev in events)
                 {
+                    var shouldExclude = await ShouldExcludeEventAsync(ev.Summary ?? "");
+                    if (shouldExclude)
+                    {
+                        excludedEvents.Add(ev.Summary ?? "Unknown");
+                        _logger.LogInfo($"Excluded event from report: '{ev.Summary}' for calendar: {cal.Summary}");
+                        continue; // Bỏ qua event này
+                    }
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
@@ -1782,7 +1797,16 @@ namespace Service
 
             return orderDto;
         }
+        private async Task<bool> ShouldExcludeEventAsync(string eventTitle)
+        {
+            if (string.IsNullOrWhiteSpace(eventTitle))
+                return false;
 
+            var activeKeywords = await _repository.EventExclusionKeyword.GetActiveKeywordsAsync(false);
+
+            return activeKeywords.Any(keyword =>
+                eventTitle.Contains(keyword.Keyword, StringComparison.OrdinalIgnoreCase));
+        }
         #endregion
     }
 }

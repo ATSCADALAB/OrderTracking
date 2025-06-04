@@ -14,6 +14,7 @@ using Shared.DataTransferObjects.SheetOrder;
 using SheetOrderDto = Shared.DataTransferObjects.SheetOrder.SheetOrderDto;
 using Shared.DataTransferObjects.CalendarEvent;
 using Shared.DataTransferObjects.KpiConfiguration;
+using Shared.DataTransferObjects.EventExclusion;
 namespace QuickStart
 {
     public class MappingProfile : Profile
@@ -56,6 +57,20 @@ namespace QuickStart
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.IsActive, opt => opt.Ignore());
             CreateMap<KpiConfigurationForUpdateDto, KpiConfiguration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
+            // Entity to DTO
+            CreateMap<EventExclusionKeyword, EventExclusionKeywordDto>();
+
+            // Creation DTO to Entity
+            CreateMap<EventExclusionKeywordForCreationDto, EventExclusionKeyword>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
+
+            // Update DTO to Entity  
+            CreateMap<EventExclusionKeywordForUpdateDto, EventExclusionKeyword>()
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());

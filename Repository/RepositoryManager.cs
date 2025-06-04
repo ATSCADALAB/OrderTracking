@@ -16,6 +16,8 @@ namespace Repository
         private readonly Lazy<ICalendarEventRepository> _calendarEventRepository;
         private readonly Lazy<ISendMailRepository> _sendMailRepository;
         private readonly Lazy<IKpiConfigurationRepository> _kpiConfigurationRepository;
+        private readonly Lazy<IEventExclusionKeywordRepository> _eventExclusionKeywordRepository;
+
 
         public RepositoryManager(RepositoryContext repositoryContext, RoleManager<UserRole> roleManager)
         {
@@ -29,6 +31,7 @@ namespace Repository
             _calendarEventRepository = new Lazy<ICalendarEventRepository>(() => new CalendarEventRepository(repositoryContext));
             _sendMailRepository = new Lazy<ISendMailRepository>(() => new SendMailRepository(repositoryContext));
             _kpiConfigurationRepository = new Lazy<IKpiConfigurationRepository>(() => new KpiConfigurationRepository(repositoryContext));
+            _eventExclusionKeywordRepository = new Lazy<IEventExclusionKeywordRepository>(() => new EventExclusionKeywordRepository(repositoryContext));
         }
         public IUserCalendarRepository UserCalendar => _userCalendarRepository.Value;
         public ICategoryRepository Category => _categoryRepository.Value;
@@ -39,6 +42,7 @@ namespace Repository
         public ICalendarEventRepository CalendarEvent => _calendarEventRepository.Value;
         public ISendMailRepository SendMail => _sendMailRepository.Value;
         public IKpiConfigurationRepository KpiConfiguration => _kpiConfigurationRepository.Value;
+        public IEventExclusionKeywordRepository EventExclusionKeyword => _eventExclusionKeywordRepository.Value;
 
         public async Task SaveAsync() => await _repositoryContext.SaveChangesAsync();
     }

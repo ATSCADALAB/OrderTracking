@@ -11,6 +11,7 @@
         ICalendarEventRepository CalendarEvent { get; }
         ISendMailRepository SendMail { get; }
         IKpiConfigurationRepository KpiConfiguration { get; }
+        IEventExclusionKeywordRepository EventExclusionKeyword { get; }
         Task SaveAsync();
     }
 }

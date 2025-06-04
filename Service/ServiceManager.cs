@@ -32,6 +32,8 @@ namespace Service
         private readonly Lazy<ICalendarEventService> _calendarEventService;
         private readonly Lazy<ISendMailService> _sendMailService;
         private readonly Lazy<IKpiConfigurationService> _kpiConfigurationService;
+        private readonly Lazy<IEventExclusionKeywordService> _eventExclusionKeywordService;
+
         public ServiceManager(
             IRepositoryManager repositoryManager,
             ILoggerManager logger,
@@ -59,6 +61,7 @@ namespace Service
             _calendarEventService = new Lazy<ICalendarEventService>(() => new CalendarEventService(repositoryManager, mapper));
             _sendMailService = new Lazy<ISendMailService>(() => new SendMailService(repositoryManager, logger, emailSender, httpClient));
             _kpiConfigurationService= new Lazy<IKpiConfigurationService>(() => new KpiConfigurationService(repositoryManager, logger, mapper));
+            _eventExclusionKeywordService = new Lazy<IEventExclusionKeywordService>(() => new EventExclusionKeywordService(repositoryManager, logger, mapper));
         }
 
         public IWcfService WcfService => _wcfService.Value;
@@ -76,5 +79,6 @@ namespace Service
         public ICalendarEventService CalendarEventService => _calendarEventService.Value;
         public ISendMailService SendMailService => _sendMailService.Value;
         public IKpiConfigurationService KpiConfigurationService => _kpiConfigurationService.Value;
+        public IEventExclusionKeywordService EventExclusionKeywordService => _eventExclusionKeywordService.Value;
     }
 }
