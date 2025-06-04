@@ -1419,8 +1419,14 @@ namespace Service
                                 .Replace("<br/>", "\n")
                                 .Replace("<br />", "\n");
 
+            // THÊM DÒNG NÀY: Loại bỏ phần PB khỏi hiển thị timeline
+            plainText = Regex.Replace(plainText, @"PB\s*:\s*\d+\s*", "", RegexOptions.IgnoreCase);
+
             // Loại bỏ khoảng trắng thừa nhưng giữ line breaks
             plainText = Regex.Replace(plainText, @"[ \t]+", " ");
+
+            // Loại bỏ các dòng trống thừa
+            plainText = Regex.Replace(plainText, @"\n\s*\n", "\n", RegexOptions.Multiline);
 
             return plainText.Trim();
         }
