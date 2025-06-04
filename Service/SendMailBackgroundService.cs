@@ -10,7 +10,7 @@ namespace QuickStart.Services
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<SendMailBackgroundService> _logger;
-        private readonly TimeSpan _period = TimeSpan.FromMinutes(1); // 120 phút
+        private readonly TimeSpan _period = TimeSpan.FromMinutes(10); // 120 phút
 
         public SendMailBackgroundService(
             IServiceScopeFactory serviceScopeFactory,

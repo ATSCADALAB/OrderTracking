@@ -501,60 +501,68 @@ namespace Service
 
         public async Task<UnifiedOrderDto?> SearchOrderFromAllSourcesAsync(string orderCode)
         {
-            if (string.IsNullOrWhiteSpace(orderCode))
-                throw new ArgumentException("Mã đơn hàng không được để trống.", nameof(orderCode));
-
-            var credential = await AuthenticateSheetAsync();
-            var sheetService = new SheetsService(new BaseClientService.Initializer
+            try
             {
-                HttpClientInitializer = credential,
-                ApplicationName = "Sheets Order Search"
-            });
+                if (string.IsNullOrWhiteSpace(orderCode))
+                    throw new ArgumentException("Mã đơn hàng không được để trống.", nameof(orderCode));
 
-            var sheetResult = await SearchOrderFromSheetAsync(orderCode);
-            var calendarResult = await SearchEventByOrderCodeAsync(orderCode, CancellationToken.None);
+                var credential = await AuthenticateSheetAsync();
+                var sheetService = new SheetsService(new BaseClientService.Initializer
+                {
+                    HttpClientInitializer = credential,
+                    ApplicationName = "Sheets Order Search"
+                });
 
-            if (sheetResult == null && calendarResult == null)
+                var sheetResult = await SearchOrderFromSheetAsync(orderCode);
+                var calendarResult = await SearchEventByOrderCodeAsync(orderCode, CancellationToken.None);
+
+                if (sheetResult == null && calendarResult == null)
+                    return null;
+
+                var unifiedDto = new UnifiedOrderDto { OrderCode = orderCode };
+
+                if (sheetResult != null && calendarResult != null)
+                {
+                    unifiedDto.Source = "Sheets";
+                    unifiedDto.Title = sheetResult.OrderName;
+                    unifiedDto.EndDate = sheetResult.EndDate;
+                    unifiedDto.Handler = calendarResult.Handler;
+                    unifiedDto.Status = sheetResult.Status;
+                    unifiedDto.Dev1 = sheetResult.Dev1;
+                    unifiedDto.QC = sheetResult.QC;
+                    unifiedDto.Code = sheetResult.Code;
+                    unifiedDto.Sale = sheetResult.Sale;
+                }
+                else if (calendarResult != null)
+                {
+                    unifiedDto.Source = "Calendar";
+                    unifiedDto.Title = calendarResult.Title;
+                    unifiedDto.StartDate = calendarResult.StartDate;
+                    unifiedDto.EndDate = calendarResult.EndDate;
+                    unifiedDto.Handler = calendarResult.Handler;
+                    unifiedDto.Timeline = calendarResult.Timeline;
+                    unifiedDto.QC = calendarResult.QC;
+                    unifiedDto.Sale = calendarResult.Sale;
+                }
+                else
+                {
+                    unifiedDto.Source = "Sheets";
+                    unifiedDto.Title = sheetResult.OrderName;
+                    unifiedDto.EndDate = sheetResult.EndDate;
+                    unifiedDto.Handler = sheetResult.Code;
+                    unifiedDto.Status = sheetResult.Status;
+                    unifiedDto.Dev1 = sheetResult.Dev1;
+                    unifiedDto.QC = sheetResult.QC;
+                    unifiedDto.Code = sheetResult.Code;
+                    unifiedDto.Sale = sheetResult.Sale;
+                }
+                return unifiedDto;
+            }
+            catch
+            {
                 return null;
-
-            var unifiedDto = new UnifiedOrderDto { OrderCode = orderCode };
-
-            if (sheetResult != null && calendarResult != null)
-            {
-                unifiedDto.Source = "Sheets";
-                unifiedDto.Title = sheetResult.OrderName;
-                unifiedDto.EndDate = sheetResult.EndDate;
-                unifiedDto.Handler = calendarResult.Handler;
-                unifiedDto.Status = sheetResult.Status;
-                unifiedDto.Dev1 = sheetResult.Dev1;
-                unifiedDto.QC = sheetResult.QC;
-                unifiedDto.Code = sheetResult.Code;
-                unifiedDto.Sale = sheetResult.Sale;
             }
-            else if (calendarResult != null)
-            {
-                unifiedDto.Source = "Calendar";
-                unifiedDto.Title = calendarResult.Title;
-                unifiedDto.StartDate = calendarResult.StartDate;
-                unifiedDto.EndDate = calendarResult.EndDate;
-                unifiedDto.Handler = calendarResult.Handler;
-                unifiedDto.Timeline = calendarResult.Timeline;
-                unifiedDto.QC = calendarResult.QC;
-                unifiedDto.Sale = calendarResult.Sale;
-            }
-            else
-            {
-                unifiedDto.Source = "Sheets";
-                unifiedDto.Title = sheetResult.OrderName;
-                unifiedDto.EndDate = sheetResult.EndDate;
-                unifiedDto.Handler = sheetResult.Code;
-                unifiedDto.Status = sheetResult.Status;
-                unifiedDto.Dev1 = sheetResult.Dev1;
-                unifiedDto.QC = sheetResult.QC;
-                unifiedDto.Code = sheetResult.Code;
-                unifiedDto.Sale = sheetResult.Sale;
-            }
-            return unifiedDto;
+            
         }
 
         #endregion
@@ -623,6 +631,8 @@ namespace Service
                 var excludedEvents = new List<string>();
                 foreach (var ev in events)
                 {
+
+                    
                     var shouldExclude = await ShouldExcludeEventAsync(ev.Summary ?? "");
                     if (shouldExclude)
                     {
@@ -633,7 +643,8 @@ namespace Service
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
-
+                    if (evStart < startDate || evStart > endDate)
+                        continue;
                     var lastTimelineDate = GetLastTimelineDate(desc);
                     if (lastTimelineDate == null) continue;
 
@@ -700,11 +711,22 @@ namespace Service
                 if (!timelineSteps.Any())
                     return null;
 
-                // Lấy ngày cuối cùng trong timeline
+                // ❗ KIỂM TRA TẤT CẢ TIMELINE STEPS PHẢI CÓ STATUS "V"
+                foreach (var step in timelineSteps)
+                {
+                    // Nếu có bất kỳ step nào không có [v] → timeline chưa hoàn thành
+                    if (string.IsNullOrEmpty(step.Status) || step.Status.ToUpper() != "V")
+                    {
+                        return null; // Chưa hoàn thành hết
+                    }
+                }
+
+                // ✅ Tất cả steps đều [v] → Lấy ngày cuối cùng
                 return timelineSteps.OrderByDescending(t => t.Date).First().Date;
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                _logger.LogError($"Error checking completed timeline: {ex.Message}");
                 return null;
             }
         }
@@ -777,7 +799,8 @@ namespace Service
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
-
+                    if (evStart < startDate || evStart > endDate)
+                        continue;
                     var lastTimelineDate = GetLastTimelineDate(desc);
                     if (lastTimelineDate == null) continue;
 
@@ -1264,9 +1287,15 @@ namespace Service
 
                 // Bước 5: Xử lý logic status cascade (nếu bước sau hoàn thành thì bước trước cũng hoàn thành)
                 ProcessStatusCascade(timelineSteps);
+                if (timelineSteps.Any())
+                {
+                    var completedCount = timelineSteps.Count(s => !string.IsNullOrEmpty(s.Status) && s.Status.ToUpper() == "V");
+                    var totalCount = timelineSteps.Count;
 
+                    Console.WriteLine($"Timeline parsed: {completedCount}/{totalCount} steps completed");
+                }
                 // Bước 6: Sắp xếp theo ngày (ĐẢM BẢO ĐÚNG THỨ TỰ)
-                return timelineSteps.OrderBy(t => t.Date).ToList();
+                return timelineSteps.OrderBy(t => t.Date).ToList(); 
             }
             catch (Exception ex)
             {
