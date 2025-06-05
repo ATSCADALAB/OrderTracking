@@ -616,7 +616,7 @@ namespace Service
 
                 var req = service.Events.List(cal.Id);
                 req.TimeMin = startDate;
-                req.TimeMax = endDate;
+                req.TimeMax = endDate.AddDays(1);
                 req.ShowDeleted = false;
                 req.SingleEvents = true;
                 req.OrderBy = EventsResource.ListRequest.OrderByEnum.StartTime;
