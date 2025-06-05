@@ -1148,43 +1148,52 @@ namespace Service
 
             try
             {
-                // Chuẩn hóa HTML content
                 var plainText = CleanHtmlContent(description);
 
-                // Các pattern để tìm QC với độ linh hoạt cao - Xử lý đầy đủ tất cả trường hợp
+                // CẬP NHẬT CÁC PATTERN ĐỂ HỖ TRỢ CẢ [v] VÀ (v)
                 var qcPatterns = new[]
                 {
-                    // Pattern chính với ngày: - DD/MM/YYYY: QC-TenNguoi[v]
-                    @"[-\s]*\d{1,2}\/\d{1,2}\/\d{2,4}\s*:\s*QC\s*[-:]?\s*([^[\]\n\r;]+?)\s*\[([vV])\]",
-                    
-                    // Pattern QC với ngày nhưng không có dấu gạch: DD/MM/YYYY: QC-TenNguoi[v]  
-                    @"\d{1,2}\/\d{1,2}\/\d{2,4}\s*:\s*QC\s*[-:]?\s*([^[\]\n\r;]+?)\s*\[([vV])\]",
-                    
-                    // Pattern QC không có ngày: QC-TenNguoi[v] hoặc QC: TenNguoi[v]
-                    @"QC\s*[-:]?\s*([^[\]\n\r;]+?)\s*\[([vV])\]",
-                    
-                    // Pattern QC có dấu chấm phẩy: QC-TenNguoi[v];
-                    @"QC\s*[-:]?\s*([^[\]\n\r;]+?)\s*\[([vV])\]\s*;?",
-                    
-                    // Pattern QC chỉ có tên không có status: QC-TenNguoi; hoặc QC: TenNguoi
-                    @"QC\s*[-:]?\s*([^[\]\n\r;:]+?)(?:\s*[;:]?\s*$|\s*[;:])",
-                    
-                    // Pattern QC trong timeline: bất kỳ dòng nào có QC
-                    @"[-\s]*\d{1,2}\/\d{1,2}\/\d{2,4}.*?QC\s*[-:]?\s*([^[\]\n\r;]+?)(?:\s*\[([vV])\])?",
-                    
-                    // Pattern QC không có định dạng chuẩn: tìm "QC" và lấy text sau đó
-                    @"QC\s*[-:]?\s*([A-Za-zÀ-ỹ\s]+?)(?=\s*[\[\n\r;:]|$)"
-                };
+            // Pattern chính với ngày và ngoặc vuông: - DD/MM/YYYY: QC-TenNguoi[v]
+            @"[-\s]*\d{1,2}\/\d{1,2}\/\d{2,4}\s*:\s*QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\[([vV✓])\]",
+            
+            // Pattern chính với ngày và ngoặc tròn: - DD/MM/YYYY: QC-TenNguoi(v)
+            @"[-\s]*\d{1,2}\/\d{1,2}\/\d{2,4}\s*:\s*QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\(([vV✓])\)",
+            
+            // Pattern QC với ngày nhưng không có dấu gạch - ngoặc vuông
+            @"\d{1,2}\/\d{1,2}\/\d{2,4}\s*:\s*QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\[([vV✓])\]",
+            
+            // Pattern QC với ngày nhưng không có dấu gạch - ngoặc tròn  
+            @"\d{1,2}\/\d{1,2}\/\d{2,4}\s*:\s*QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\(([vV✓])\)",
+            
+            // Pattern QC không có ngày - ngoặc vuông
+            @"QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\[([vV✓])\]",
+            
+            // Pattern QC không có ngày - ngoặc tròn
+            @"QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\(([vV✓])\)",
+            
+            // Pattern QC có dấu chấm phẩy - ngoặc vuông
+            @"QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\[([vV✓])\]\s*;?",
+            
+            // Pattern QC có dấu chấm phẩy - ngoặc tròn
+            @"QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)\s*\(([vV✓])\)\s*;?",
+            
+            // Pattern QC chỉ có tên không có status
+            @"QC\s*[-:]?\s*([^[\]\(\)\n\r;:]+?)(?:\s*[;:]?\s*$|\s*[;:])",
+            
+            // Pattern QC trong timeline với status hỗn hợp
+            @"[-\s]*\d{1,2}\/\d{1,2}\/\d{2,4}.*?QC\s*[-:]?\s*([^[\]\(\)\n\r;]+?)(?:\s*[\[\(]([vV✓])[\]\)])?",
+            
+            // Pattern QC không có định dạng chuẩn
+            @"QC\s*[-:]?\s*([A-Za-zÀ-ỹ\s]+?)(?=\s*[\[\(\n\r;:]|$)"
+        };
 
                 foreach (var pattern in qcPatterns)
                 {
                     var matches = Regex.Matches(plainText, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline);
                     if (matches.Count > 0)
                     {
-                        // Lấy match cuối cùng (QC gần nhất)
                         var lastMatch = matches[matches.Count - 1];
 
-                        // Tìm group chứa tên QC
                         string qcName = "";
                         if (lastMatch.Groups.Count >= 2 && !string.IsNullOrWhiteSpace(lastMatch.Groups[1].Value))
                         {
@@ -1193,10 +1202,8 @@ namespace Service
 
                         if (!string.IsNullOrWhiteSpace(qcName))
                         {
-                            // Chuẩn hóa tên QC
                             qcName = NormalizeQCName(qcName);
 
-                            // Validate tên QC hợp lệ
                             if (IsValidQCName(qcName))
                             {
                                 return qcName;
@@ -1205,12 +1212,12 @@ namespace Service
                     }
                 }
 
-                // Fallback: Tìm bất kỳ text nào sau chữ "QC" 
+                // Fallback patterns
                 var fallbackPatterns = new[]
                 {
-                    @"QC\s*[-:]?\s*([A-Za-zÀ-ỹ\s]{2,30})",
-                    @".*QC.*?([A-Za-zÀ-ỹ\s]{3,25})"
-                };
+            @"QC\s*[-:]?\s*([A-Za-zÀ-ỹ\s]{2,30})",
+            @".*QC.*?([A-Za-zÀ-ỹ\s]{3,25})"
+        };
 
                 foreach (var fallbackPattern in fallbackPatterns)
                 {
@@ -1234,7 +1241,35 @@ namespace Service
                 return "Không rõ";
             }
         }
+        private string? NormalizeStatus(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return null;
 
+            status = status.Trim().ToUpper();
+
+            return status switch
+            {
+                "V" or "✓" or "DONE" or "COMPLETE" or "COMPLETED" => "V",
+                "X" or "❌" or "FAIL" or "FAILED" or "ERROR" => "X",
+                _ => status // Giữ nguyên nếu không khớp với các pattern đã biết
+            };
+        }
+        private bool IsStepCompleted(TimelineStep step)
+        {
+            if (step == null || string.IsNullOrEmpty(step.Status))
+                return false;
+
+            var normalizedStatus = NormalizeStatus(step.Status);
+            return normalizedStatus == "V";
+        }
+        private bool AreAllStepsCompleted(List<TimelineStep> timelineSteps)
+        {
+            if (!timelineSteps.Any())
+                return false;
+
+            return timelineSteps.All(step => IsStepCompleted(step));
+        }
         #endregion
 
         #region Timeline Processing Methods
@@ -1246,31 +1281,21 @@ namespace Service
 
             try
             {
-                // Bước 1: Chuẩn hóa HTML và loại bỏ các tag HTML
                 var plainText = CleanHtmlContent(descriptionHtml);
-
                 var timelineSteps = new List<TimelineStep>();
-
-                // Bước 2: Tìm phần TIMELINE (case-insensitive) hoặc bắt đầu parsing trực tiếp
                 var timelineSection = ExtractTimelineSection(plainText);
 
-                // DEBUG: Log để kiểm tra
                 Console.WriteLine($"Timeline section: {timelineSection.Substring(0, Math.Min(100, timelineSection.Length))}...");
 
-                // Bước 3: Tách timeline entries
                 var timelineEntries = SplitTimelineEntries(timelineSection);
-
-                // DEBUG: Log số lượng entries
                 Console.WriteLine($"Found {timelineEntries.Count} timeline entries");
 
-                // Bước 4: Parse từng entry
                 foreach (var entry in timelineEntries)
                 {
                     var cleanEntry = CleanTimelineLine(entry);
                     if (string.IsNullOrWhiteSpace(cleanEntry) || !ContainsDate(cleanEntry))
                         continue;
 
-                    // DEBUG: Log entry đang parse
                     Console.WriteLine($"Parsing entry: {cleanEntry.Substring(0, Math.Min(50, cleanEntry.Length))}...");
 
                     var step = ParseTimelineEntryDirect(cleanEntry);
@@ -1285,17 +1310,19 @@ namespace Service
                     }
                 }
 
-                // Bước 5: Xử lý logic status cascade (nếu bước sau hoàn thành thì bước trước cũng hoàn thành)
+                // Xử lý logic status cascade
                 ProcessStatusCascade(timelineSteps);
+
                 if (timelineSteps.Any())
                 {
-                    var completedCount = timelineSteps.Count(s => !string.IsNullOrEmpty(s.Status) && s.Status.ToUpper() == "V");
+                    var completedCount = timelineSteps.Count(s => !string.IsNullOrEmpty(s.Status) &&
+                        (s.Status.ToUpper() == "V" || s.Status.ToUpper() == "✓")); // HỖ TRỢ CẢ V VÀ ✓
                     var totalCount = timelineSteps.Count;
 
                     Console.WriteLine($"Timeline parsed: {completedCount}/{totalCount} steps completed");
                 }
-                // Bước 6: Sắp xếp theo ngày (ĐẢM BẢO ĐÚNG THỨ TỰ)
-                return timelineSteps.OrderBy(t => t.Date).ToList(); 
+
+                return timelineSteps.OrderBy(t => t.Date).ToList();
             }
             catch (Exception ex)
             {
@@ -1358,28 +1385,50 @@ namespace Service
 
             try
             {
-                // Pattern đơn giản và chính xác: - DD/MM/YYYY: Description[status]
-                var pattern = @"^-?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})\s*:\s*(.*?)(\[([vVxX])\])?\s*$";
-                var match = Regex.Match(entry.Trim(), pattern, RegexOptions.IgnoreCase);
-
-                if (match.Success)
+                // CẬP NHẬT PATTERN ĐỂ HỖ TRỢ CẢ [v] VÀ (v)
+                var patterns = new[]
                 {
-                    var dateStr = match.Groups[1].Value.Trim();
-                    var description = match.Groups[2].Value.Trim();
-                    var status = match.Groups.Count > 4 && !string.IsNullOrEmpty(match.Groups[4].Value)
-                                ? match.Groups[4].Value.ToUpper()
-                                : null;
+            // Pattern chính với ngoặc vuông: - DD/MM/YYYY: Description[v] hoặc [x]
+            @"^-?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})\s*:\s*(.*?)(\[([vVxX✓❌])\])?\s*$",
+            
+            // Pattern với ngoặc tròn: - DD/MM/YYYY: Description(v) hoặc (x)
+            @"^-?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})\s*:\s*(.*?)(\(([vVxX✓❌])\))?\s*$",
+            
+            // Pattern hỗn hợp: có thể có cả hai loại ngoặc
+            @"^-?\s*(\d{1,2}\/\d{1,2}\/\d{2,4})\s*:\s*(.*?)[\[\(]([vVxX✓❌])[\]\)]\s*$"
+        };
 
-                    // Parse date
-                    var parsedDate = ParseDateFlexible(dateStr);
-                    if (parsedDate.HasValue)
+                foreach (var pattern in patterns)
+                {
+                    var match = Regex.Match(entry.Trim(), pattern, RegexOptions.IgnoreCase);
+
+                    if (match.Success)
                     {
-                        return new TimelineStep
+                        var dateStr = match.Groups[1].Value.Trim();
+                        var description = match.Groups[2].Value.Trim();
+                        string? status = null;
+
+                        // Tìm status từ các group khác nhau tùy theo pattern
+                        if (match.Groups.Count > 4 && !string.IsNullOrEmpty(match.Groups[4].Value))
                         {
-                            Date = parsedDate.Value,
-                            Description = description,
-                            Status = status
-                        };
+                            status = NormalizeStatus(match.Groups[4].Value);
+                        }
+                        else if (match.Groups.Count > 3 && !string.IsNullOrEmpty(match.Groups[3].Value))
+                        {
+                            status = NormalizeStatus(match.Groups[3].Value);
+                        }
+
+                        // Parse date
+                        var parsedDate = ParseDateFlexible(dateStr);
+                        if (parsedDate.HasValue)
+                        {
+                            return new TimelineStep
+                            {
+                                Date = parsedDate.Value,
+                                Description = description,
+                                Status = status
+                            };
+                        }
                     }
                 }
             }
