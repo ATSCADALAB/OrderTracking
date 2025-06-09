@@ -576,10 +576,30 @@ namespace Service
             if (kpiConfig == null)
                 throw new Exception("No active KPI configuration found");
 
+            // Lấy TẤT CẢ users từ UserCalendar
             var userCalendarList = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
             var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendarList);
 
+            // ✅ KHỞI TẠO KẾT QUẢ CHO TẤT CẢ USERS TRƯỚC
             var result = new List<CalendarUserKpiDto>();
+
+            // Tạo entry mặc định cho tất cả users với giá trị 0
+            foreach (var userCal in userCalendarDto)
+            {
+                result.Add(new CalendarUserKpiDto
+                {
+                    UserName = userCal.UserName ?? userCal.Name ?? "Unknown",
+                    SmallOrders = 0,
+                    MediumOrders = 0,
+                    LargeOrders = 0,
+                    AverageStars = 0.0,
+                    TotalPenalty = 0.0,
+                    RewardOrPenalty = 0.0,
+                    PenaltyDetails = "Không có dữ liệu"
+                });
+            }
+
+            // Khởi tạo Google Calendar Service
             UserCredential credential;
             using (var stream = new FileStream(Path.Combine(_googleAuthPath, "credentials.json"), FileMode.Open, FileAccess.Read))
             {
@@ -605,15 +625,41 @@ namespace Service
 
             var calendars = service.CalendarList.List().Execute().Items;
 
+            // ✅ XỬ LÝ TỪNG CALENDAR VÀ CẬP NHẬT KẾT QUẢ
             foreach (var cal in calendars)
             {
                 if (excluded.Contains(cal.Summary)) continue;
 
-                var userCal = userCalendarDto.FirstOrDefault(x => string.Equals(x.Name, cal.Summary, StringComparison.OrdinalIgnoreCase));
+                // Tìm user calendar tương ứng
+                var userCal = userCalendarDto.FirstOrDefault(x =>
+                    string.Equals(x.Name, cal.Summary, StringComparison.OrdinalIgnoreCase));
+
                 if (userCal == null) continue;
 
                 string userName = userCal.UserName ?? cal.Summary;
 
+                // Tìm entry tương ứng trong result list
+                var userResult = result.FirstOrDefault(r =>
+                    string.Equals(r.UserName, userName, StringComparison.OrdinalIgnoreCase));
+
+                if (userResult == null)
+                {
+                    // Nếu chưa có, tạo mới (trường hợp edge case)
+                    userResult = new CalendarUserKpiDto
+                    {
+                        UserName = userName,
+                        SmallOrders = 0,
+                        MediumOrders = 0,
+                        LargeOrders = 0,
+                        AverageStars = 0.0,
+                        TotalPenalty = 0.0,
+                        RewardOrPenalty = 0.0,
+                        PenaltyDetails = "Không có dữ liệu"
+                    };
+                    result.Add(userResult);
+                }
+
+                // Lấy events cho calendar này
                 var req = service.Events.List(cal.Id);
                 req.TimeMin = startDate;
                 req.TimeMax = endDate.AddDays(1);
@@ -625,14 +671,20 @@ namespace Service
                 var events = req.Execute().Items
                     .Where(e => !string.IsNullOrEmpty(e.Summary))
                     .ToList();
+                if (!events.Any())
+                {
+                    userResult.PenaltyDetails = "Không có events trong khoảng thời gian này";
+                    continue;
+                }
 
+                // Xử lý events và tính toán KPI
                 var orders = new List<CalendarReport>();
                 decimal totalPenalty = 0;
                 var excludedEvents = new List<string>();
+                var penaltyDetails = new List<string>();
+
                 foreach (var ev in events)
                 {
-
-                    
                     var shouldExclude = await ShouldExcludeEventAsync(ev.Summary ?? "");
                     if (shouldExclude)
                     {
@@ -640,24 +692,33 @@ namespace Service
                         _logger.LogInfo($"Excluded event from report: '{ev.Summary}' for calendar: {cal.Summary}");
                         continue;
                     }
+
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
+
                     if (evStart < startDate || evStart > endDate)
                         continue;
+
                     var lastTimelineDate = GetLastTimelineDate(desc);
                     if (lastTimelineDate == null) continue;
 
                     var qcDate = lastTimelineDate.Value;
                     int delta = (qcDate - evEnd).Days;
 
-                    // SỬ DỤNG KPI CONFIG THAY VÌ HARDCODE
+                    // Tính stars và days
                     int stars = CalculateStarsFromConfig(delta, kpiConfig);
                     int days = (qcDate - evStart).Days;
 
-                    // THÊM LOGIC ĐỌC PB TỪ DESCRIPTION
+                    // Tính penalty cho event này
                     decimal eventPenalty = ExtractPenaltyFromDescription(ev.Description ?? "", kpiConfig);
                     totalPenalty += eventPenalty;
+
+                    // Thêm thông tin penalty detail
+                    if (eventPenalty > 0)
+                    {
+                        penaltyDetails.Add($"{ev.Summary}: {eventPenalty}");
+                    }
 
                     orders.Add(new CalendarReport
                     {
@@ -670,33 +731,35 @@ namespace Service
                     });
                 }
 
-                if (!orders.Any()) continue;
-
-                double avgStars = orders.Average(o => o.Stars);
-
-                // SỬ DỤNG KPI CONFIG ĐỂ PHÂN LOẠI ĐƠN HÀNG
-                var orderDays = orders.Select(o => o.EventDays).ToList();
-                var (small, medium, large) = CategorizeOrdersFromConfig(orderDays, kpiConfig);
-
-                // SỬ DỤNG KPI CONFIG ĐỂ TÍNH HSSL
-                double hssl = CalculateHSSLFromConfig(small, medium, large, kpiConfig);
-
-                // SỬ DỤNG PENALTY THỰC TẾ TỪ PB THAY VÌ MẶC ĐỊNH
-                double penalty = (double)totalPenalty; // Sử dụng tổng penalty từ tất cả events
-                double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
-
-                result.Add(new CalendarUserKpiDto
+                if (orders.Any())
                 {
-                    UserName = userName,
-                    SmallOrders = small,
-                    MediumOrders = medium,
-                    LargeOrders = large,
-                    AverageStars = Math.Round(avgStars, 2),
-                    RewardOrPenalty = Math.Round(reward, 2)
-                });
+                    double avgStars = orders.Average(o => o.Stars);
+
+                    // Phân loại đơn hàng
+                    var orderDays = orders.Select(o => o.EventDays).ToList();
+                    var (small, medium, large) = CategorizeOrdersFromConfig(orderDays, kpiConfig);
+
+                    double hssl = CalculateHSSLFromConfig(small, medium, large, kpiConfig);
+
+                    double penalty = (double)totalPenalty;
+                    double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
+                    userResult.SmallOrders = small;
+                    userResult.MediumOrders = medium;
+                    userResult.LargeOrders = large;
+                    userResult.AverageStars = Math.Round(avgStars, 2);
+                    userResult.TotalPenalty = Math.Round(penalty, 2);
+                    userResult.RewardOrPenalty = Math.Round(reward, 2);
+                    userResult.PenaltyDetails = penaltyDetails.Any()
+                        ? string.Join("; ", penaltyDetails)
+                        : "Không có penalty";
+                }
+                else
+                {
+                    userResult.PenaltyDetails = "Có events nhưng không có orders hoàn thành";
+                }
             }
 
-            return result;
+            return result.OrderBy(r => r.UserName);
         }
         private DateTime? GetLastTimelineDate(string description)
         {
@@ -732,7 +795,6 @@ namespace Service
         }
         public async Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate)
         {
-            // Lấy KPI configuration
             var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
             if (kpiConfig == null)
                 throw new Exception("No active KPI configuration found");
@@ -766,11 +828,52 @@ namespace Service
             var workbook = new XLWorkbook();
             var calendars = service.CalendarList.List().Execute().Items;
 
-            foreach (var cal in calendars)
+            // ✅ TẠO SHEET CHO TẤT CẢ USERS, KỂ CẢ NHỮNG USER KHÔNG CÓ EVENTS
+            foreach (var userCal in userCalendarDto)
             {
-                if (excluded.Contains(cal.Summary)) continue;
+                string userName = userCal.UserName ?? userCal.Name ?? "Unknown";
+                var sheetName = userName.Length > 31 ? userName[..31] : userName;
 
-                var req = service.Events.List(cal.Id);
+                // Tìm calendar tương ứng
+                var correspondingCalendar = calendars.FirstOrDefault(cal =>
+                    !excluded.Contains(cal.Summary) &&
+                    string.Equals(cal.Summary, userCal.Name, StringComparison.OrdinalIgnoreCase));
+
+                var sheet = workbook.Worksheets.Add(sheetName);
+
+                if (correspondingCalendar == null)
+                {
+                    // ✅ USER KHÔNG CÓ CALENDAR HOẶC KHÔNG CÓ EVENTS - HIỂN THỊ 0
+                    sheet.Cell(1, 1).Value = "Average Stars";
+                    sheet.Cell(1, 2).Value = 0;
+                    sheet.Cell(2, 1).Value = $"Small (<{kpiConfig.LightOrder_MaxDays} days)";
+                    sheet.Cell(2, 2).Value = 0;
+                    sheet.Cell(3, 1).Value = $"Medium ({kpiConfig.MediumOrder_MinDays}-{kpiConfig.MediumOrder_MaxDays} days)";
+                    sheet.Cell(3, 2).Value = 0;
+                    sheet.Cell(4, 1).Value = $"Large (>={kpiConfig.HeavyOrder_MinDays} days)";
+                    sheet.Cell(4, 2).Value = 0;
+                    sheet.Cell(5, 1).Value = "HSSL";
+                    sheet.Cell(5, 2).Value = 0;
+                    sheet.Cell(6, 1).Value = "Total Penalty (PB)";
+                    sheet.Cell(6, 2).Value = 0;
+                    sheet.Cell(7, 1).Value = "Bonus/Penalty";
+                    sheet.Cell(7, 2).Value = 0;
+
+                    sheet.Cell(9, 1).Value = "Ghi chú";
+                    sheet.Cell(9, 2).Value = "Không có dữ liệu events trong khoảng thời gian này";
+
+                    // Format cơ bản cho sheet trống
+                    var summaryzRange = sheet.Range("A1:B7");
+                    summaryzRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+                    summaryzRange.Style.Font.Bold = true;
+                    summaryzRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    summaryzRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+
+                    continue; // Chuyển sang user tiếp theo
+                }
+
+                // ✅ XỬ LÝ CALENDAR CÓ DỮ LIỆU (code gốc)
+                var req = service.Events.List(correspondingCalendar.Id);
                 req.TimeMin = startDate;
                 req.TimeMax = endDate.AddDays(1);
                 req.ShowDeleted = false;
@@ -781,37 +884,30 @@ namespace Service
                 var events = req.Execute().Items
                     .Where(e => !string.IsNullOrEmpty(e.Summary))
                     .ToList();
-                if (!events.Any()) continue;
 
                 var orders = new List<CalendarReport>();
-                decimal totalPenalty = 0; 
-                var excludedEvents = new List<string>();
-                
+                decimal totalPenalty = 0;
+
                 foreach (var ev in events)
                 {
                     var shouldExclude = await ShouldExcludeEventAsync(ev.Summary ?? "");
-                    if (shouldExclude)
-                    {
-                        excludedEvents.Add(ev.Summary ?? "Unknown");
-                        _logger.LogInfo($"Excluded event from report: '{ev.Summary}' for calendar: {cal.Summary}");
-                        continue; // Bỏ qua event này
-                    }
+                    if (shouldExclude) continue;
+
                     var desc = Regex.Replace(ev.Description ?? "", "<.*?>", "").Trim();
                     DateTime evStart = ev.Start.DateTime ?? DateTime.Parse(ev.Start.Date);
                     DateTime evEnd = (ev.End.DateTime ?? DateTime.Parse(ev.End.Date)).AddDays(-1);
+
                     if (evStart < startDate || evStart > endDate)
                         continue;
+
                     var lastTimelineDate = GetLastTimelineDate(desc);
                     if (lastTimelineDate == null) continue;
 
                     var qcDate = lastTimelineDate.Value;
                     int delta = (qcDate - evEnd).Days;
-
-                    // SỬ DỤNG KPI CONFIG
                     int stars = CalculateStarsFromConfig(delta, kpiConfig);
                     int days = (qcDate - evStart).Days;
 
-                    // THÊM LOGIC ĐỌC PB TỪ DESCRIPTION
                     decimal eventPenalty = ExtractPenaltyFromDescription(ev.Description ?? "", kpiConfig);
                     totalPenalty += eventPenalty;
 
@@ -826,26 +922,15 @@ namespace Service
                     });
                 }
 
-                if (!orders.Any()) continue;
-
-                double avgStars = orders.Average(o => o.Stars);
-
-                // SỬ DỤNG KPI CONFIG
+                // Tính toán KPI (có thể là 0 nếu không có orders)
+                double avgStars = orders.Any() ? orders.Average(o => o.Stars) : 0;
                 var orderDays = orders.Select(o => o.EventDays).ToList();
-                var (sln, slv, sll) = CategorizeOrdersFromConfig(orderDays, kpiConfig);
-                double hssl = CalculateHSSLFromConfig(sln, slv, sll, kpiConfig);
+                var (sln, slv, sll) = orders.Any() ? CategorizeOrdersFromConfig(orderDays, kpiConfig) : (0, 0, 0);
+                double hssl = orders.Any() ? CalculateHSSLFromConfig(sln, slv, sll, kpiConfig) : 0;
+                double penalty = (double)totalPenalty;
+                double reward = orders.Any() ? CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig) : 0;
 
-                // SỬ DỤNG PENALTY THỰC TẾ TỪ PB THAY VÌ MẶC ĐỊNH
-                double penalty = (double)totalPenalty; // Sử dụng tổng penalty từ tất cả events
-                double reward = CalculateRewardFromConfig((decimal)avgStars, (decimal)hssl, (decimal)penalty, kpiConfig);
-
-                var userCal = userCalendarDto.FirstOrDefault(x => string.Equals(x.Name, cal.Summary, StringComparison.OrdinalIgnoreCase));
-                if (userCal == null) continue;
-
-                string userName = userCal.UserName ?? cal.Summary;
-                var sheetName = userName.Length > 31 ? userName[..31] : userName;
-                var sheet = workbook.Worksheets.Add(sheetName);
-
+                // Điền dữ liệu vào sheet
                 sheet.Cell(1, 1).Value = "Average Stars";
                 sheet.Cell(1, 2).Value = Math.Round(avgStars, 2);
                 sheet.Cell(2, 1).Value = $"Small (<{kpiConfig.LightOrder_MaxDays} days)";
@@ -861,7 +946,7 @@ namespace Service
                 sheet.Cell(7, 1).Value = "Bonus/Penalty";
                 sheet.Cell(7, 2).Value = Math.Round(reward, 2);
 
-                // Tiếp tục với việc format sheet...
+                // Headers cho bảng orders
                 sheet.Cell(9, 1).Value = "Title";
                 sheet.Cell(9, 2).Value = "Start";
                 sheet.Cell(9, 3).Value = "End";
@@ -869,6 +954,7 @@ namespace Service
                 sheet.Cell(9, 5).Value = "Days";
                 sheet.Cell(9, 6).Value = "Stars";
 
+                // Điền dữ liệu orders
                 int row = 10;
                 foreach (var o in orders)
                 {
@@ -881,32 +967,35 @@ namespace Service
                     row++;
                 }
 
-                // Format Excel như cũ...
+                // Format Excel...
                 sheet.Columns().AdjustToContents();
-                var summaryRange = sheet.Range("A1:B7"); // Thay đổi từ B6 thành B7 để bao gồm Total Penalty
+                var summaryRange = sheet.Range("A1:B7");
                 summaryRange.Style.Fill.BackgroundColor = XLColor.LightGray;
                 summaryRange.Style.Font.Bold = true;
                 summaryRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 summaryRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
-                var headerRange = sheet.Range("A9:F9"); // Thay đổi từ A8 thành A9
+                var headerRange = sheet.Range("A9:F9");
                 headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
                 headerRange.Style.Font.Bold = true;
                 headerRange.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
                 headerRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
                 headerRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
-                var lastRow = sheet.LastRowUsed().RowNumber();
-                var tableRange = sheet.Range($"A9:F{lastRow}"); // Thay đổi từ A8 thành A9
-                tableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
-                tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
+                if (orders.Any())
+                {
+                    var lastRow = sheet.LastRowUsed().RowNumber();
+                    var tableRange = sheet.Range($"A9:F{lastRow}");
+                    tableRange.Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    tableRange.Style.Border.InsideBorder = XLBorderStyleValues.Thin;
 
-                var starsRange = sheet.Range($"F10:F{lastRow}"); // Thay đổi từ F9 thành F10
-                starsRange.AddConditionalFormat().WhenGreaterThan(4).Fill.SetBackgroundColor(XLColor.LightGreen);
-                starsRange.AddConditionalFormat().WhenLessThan(3).Fill.SetBackgroundColor(XLColor.LightCoral);
+                    var starsRange = sheet.Range($"F10:F{lastRow}");
+                    starsRange.AddConditionalFormat().WhenGreaterThan(4).Fill.SetBackgroundColor(XLColor.LightGreen);
+                    starsRange.AddConditionalFormat().WhenLessThan(3).Fill.SetBackgroundColor(XLColor.LightCoral);
 
-                var titleRange = sheet.Range($"A10:A{lastRow}"); // Thay đổi từ A9 thành A10
-                titleRange.Style.Fill.BackgroundColor = XLColor.LightCyan;
+                    var titleRange = sheet.Range($"A10:A{lastRow}");
+                    titleRange.Style.Fill.BackgroundColor = XLColor.LightCyan;
+                }
             }
 
             using var ms = new MemoryStream();
@@ -1523,7 +1612,30 @@ namespace Service
 
             return plainText.Trim();
         }
+        private string CleanHtmlContentNoPB(string htmlContent)
+        {
+            if (string.IsNullOrWhiteSpace(htmlContent))
+                return "";
 
+            // Loại bỏ HTML tags
+            var plainText = Regex.Replace(htmlContent, @"<[^>]*>", "");
+
+            // Decode HTML entities
+            plainText = System.Net.WebUtility.HtmlDecode(plainText);
+
+            // Chuẩn hóa line breaks
+            plainText = plainText.Replace("<br>", "\n")
+                                .Replace("<br/>", "\n")
+                                .Replace("<br />", "\n");
+
+            // Loại bỏ khoảng trắng thừa nhưng giữ line breaks
+            plainText = Regex.Replace(plainText, @"[ \t]+", " ");
+
+            // Loại bỏ các dòng trống thừa
+            plainText = Regex.Replace(plainText, @"\n\s*\n", "\n", RegexOptions.Multiline);
+
+            return plainText.Trim();
+        }
         // Phương thức helper để extract timeline section
         private string ExtractTimelineSection(string content)
         {
@@ -1621,7 +1733,7 @@ namespace Service
             try
             {
                 // Chuẩn hóa HTML content
-                var plainText = CleanHtmlContent(description);
+                var plainText = CleanHtmlContentNoPB(description);
 
                 // Tìm pattern PB:số
                 var pbPattern = @"PB\s*:\s*(\d+)";
