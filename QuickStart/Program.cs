@@ -19,7 +19,8 @@ using Service.JwtFeatures;
 using Hangfire;
 using Hangfire.MySql;
 using QuickStart.Services;
-using Hangfire.Dashboard; // Namespace cho HangfireSyncService
+using Hangfire.Dashboard;
+using Microsoft.Extensions.Options; // Namespace cho HangfireSyncService
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,8 +40,29 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.SuppressModelStateInvalidFilter = true;
 });
+
+// ✅ EMAIL CONFIGURATION - SỬA LẠI ĐÚNG THỨ TỰ
+var emailConfig = builder.Configuration.GetSection("EmailConfiguration").Get<EmailConfiguration>();
+builder.Services.AddSingleton(emailConfig);
+
+// ✅ THÊM EMAIL SETTINGS
+builder.Services.Configure<EmailSettings>(
+    builder.Configuration.GetSection("EmailSettings"));
+
+// ✅ CHỈ ĐĂNG KÝ 1 LẦN IEmailSender
+builder.Services.AddSingleton<IEmailSender>(provider =>
+{
+    var emailConfig = provider.GetRequiredService<EmailConfiguration>();
+    var emailSettings = provider.GetRequiredService<IOptions<EmailSettings>>().Value;
+    return new EmailSender(emailConfig, emailSettings);
+});
+
+// ✅ HTTP CLIENT CHO SEND MAIL SERVICE
 builder.Services.AddHttpClient<ISendMailService, SendMailService>();
-builder.Services.AddHostedService<SendMailBackgroundService>();
+
+// ✅ BACKGROUND SERVICE VỚI EMAIL SETTINGS
+//builder.Services.AddHostedService<SendMailBackgroundService>();
+
 builder.Services.AddScoped<ValidationFilterAttribute>();
 builder.Services.AddAuthentication();
 builder.Services.ConfigureIdentity();
@@ -53,18 +75,12 @@ builder.Services.Configure<DataProtectionTokenProviderOptions>(opt =>
 
 builder.Services.AddScoped<JwtHandler>();
 
-var emailConfig = builder.Configuration.GetSection("EmailConfiguration").Get<EmailConfiguration>();
-builder.Services.AddSingleton(emailConfig);
-
 builder.Services.AddScoped<AuthorizePermissionAttribute>(provider =>
     new AuthorizePermissionAttribute(
         "",
         "",
         provider.GetRequiredService<IServiceManager>()
     ));
-
-builder.Services.AddScoped<IEmailSender, EmailSender>();
-
 // === THÊM HANGFIRE CONFIGURATION ===
 // Đăng ký HangfireSyncService
 builder.Services.AddScoped<HangfireSyncService>();
@@ -159,7 +175,6 @@ app.UseAuthorization();
 app.UseEndpoints(endpoints =>
 {
     endpoints.MapControllers();
-    //endpoints.MapHub<DataHub>("/dataHub");
 });
 
 app.UseSwagger();

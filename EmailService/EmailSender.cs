@@ -1,33 +1,101 @@
 ﻿using MailKit.Net.Smtp;
 using MimeKit;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace EmailService
 {
     public class EmailSender : IEmailSender
     {
         private readonly EmailConfiguration _emailConfig;
+        private readonly EmailSettings _emailSettings;
+        private readonly SmtpConnectionManager _connectionManager;
+        private readonly SemaphoreSlim _rateLimiter;
 
-        public EmailSender(EmailConfiguration emailConfig)
+        // Tracking để rate limiting
+        private static readonly ConcurrentQueue<DateTime> _recentSends = new();
+        private static readonly object _lockObject = new object();
+
+        public EmailSender(EmailConfiguration emailConfig, EmailSettings emailSettings)
         {
             _emailConfig = emailConfig;
-        }
-
-        public void SendEmail(Message message)
-        {
-            var emailMessage = CreateEmailMessage(message);
-
-            Send(emailMessage);
+            _emailSettings = emailSettings;
+            _connectionManager = new SmtpConnectionManager(_emailConfig, _emailSettings);
+            _rateLimiter = new SemaphoreSlim(1, 1); // Serialize email sending
         }
 
         public async Task SendEmailAsync(Message message)
         {
-            var mailMessage = CreateEmailMessage(message);
+            await _rateLimiter.WaitAsync();
+            try
+            {
+                // ✅ KIỂM TRA RATE LIMIT
+                if (!CanSendEmail())
+                {
+                    throw new InvalidOperationException($"Rate limit exceeded. Max {_emailSettings.MaxEmailsPerHour} emails per hour allowed.");
+                }
 
-            await SendAsync(mailMessage);
+                SmtpClient client = null;
+                try
+                {
+                    // ✅ LẤY CONNECTION TỪ POOL
+                    client = await _connectionManager.GetConnectionAsync();
+                    var mailMessage = CreateEmailMessage(message);
+
+                    await client.SendAsync(mailMessage);
+
+                    // ✅ GHI NHẬN THỜI GIAN GỬI
+                    lock (_lockObject)
+                    {
+                        _recentSends.Enqueue(DateTime.UtcNow);
+                    }
+
+                    Console.WriteLine($"✅ Email sent successfully to {string.Join(", ", message.To.Select(t => t.Address))}");
+
+                    // ✅ DELAY GIỮA CÁC EMAIL
+                    await Task.Delay(TimeSpan.FromSeconds(_emailSettings.DelayBetweenEmailsSeconds));
+                }
+                finally
+                {
+                    if (client != null)
+                    {
+                        _connectionManager.ReturnConnection(client);
+                    }
+                }
+            }
+            finally
+            {
+                _rateLimiter.Release();
+            }
+        }
+
+        private bool CanSendEmail()
+        {
+            lock (_lockObject)
+            {
+                var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+
+                // Xóa các record cũ hơn 1 tiếng
+                while (_recentSends.TryPeek(out var oldest) && oldest < oneHourAgo)
+                {
+                    _recentSends.TryDequeue(out _);
+                }
+
+                var currentCount = _recentSends.Count;
+                Console.WriteLine($"📊 Emails sent in last hour: {currentCount}/{_emailSettings.MaxEmailsPerHour}");
+
+                return currentCount < _emailSettings.MaxEmailsPerHour;
+            }
+        }
+
+        // Existing method không đổi
+        public void SendEmail(Message message)
+        {
+            SendEmailAsync(message).GetAwaiter().GetResult();
         }
 
         private MimeMessage CreateEmailMessage(Message message)
@@ -49,63 +117,12 @@ namespace EmailService
                         attachment.CopyTo(ms);
                         fileBytes = ms.ToArray();
                     }
-
                     bodyBuilder.Attachments.Add(attachment.FileName, fileBytes, ContentType.Parse(attachment.ContentType));
                 }
             }
 
             emailMessage.Body = bodyBuilder.ToMessageBody();
             return emailMessage;
-        }
-
-        private void Send(MimeMessage mailMessage)
-        {
-            using (var client = new SmtpClient())
-            {
-                try
-                {
-                    client.Connect(_emailConfig.SmtpServer, _emailConfig.Port, true);
-                    client.AuthenticationMechanisms.Remove("XOAUTH2");
-                    client.Authenticate(_emailConfig.UserName, _emailConfig.Password);
-
-                    client.Send(mailMessage);
-                }
-                catch
-                {
-                    //log an error message or throw an exception, or both.
-                    throw;
-                }
-                finally
-                {
-                    client.Disconnect(true);
-                    client.Dispose();
-                }
-            }
-        }
-
-        private async Task SendAsync(MimeMessage mailMessage)
-        {
-            using (var client = new SmtpClient())
-            {
-                try
-                {
-                    await client.ConnectAsync(_emailConfig.SmtpServer, _emailConfig.Port, true);
-                    client.AuthenticationMechanisms.Remove("XOAUTH2");
-                    await client.AuthenticateAsync(_emailConfig.UserName, _emailConfig.Password);
-
-                    await client.SendAsync(mailMessage);
-                }
-                catch
-                {
-                    //log an error message or throw an exception, or both.
-                    throw;
-                }
-                finally
-                {
-                    await client.DisconnectAsync(true);
-                    client.Dispose();
-                }
-            }
         }
     }
 }

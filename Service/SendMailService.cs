@@ -246,12 +246,24 @@ namespace Service
 
         private async Task ProcessPendingSendMailsAsync()
         {
+            // ✅ CHỈ LẤY SỐ LƯỢNG GIỚI HẠN
             var pendingMails = await _repository.SendMail.GetPendingSendMailsAsync(false);
+            var emailsToProcess = pendingMails.Take(3).ToList(); // CHỈ 3 EMAILS MỖI LẦN
 
-            foreach (var sendMail in pendingMails)
+            if (!emailsToProcess.Any())
+            {
+                _logger.LogInfo("📭 No pending emails to process");
+                return;
+            }
+
+            _logger.LogInfo($"📧 Processing {emailsToProcess.Count} pending emails (limited batch)");
+
+            foreach (var sendMail in emailsToProcess)
             {
                 try
                 {
+                    _logger.LogInfo($"🔄 Processing email for order: {sendMail.OrderCode}");
+
                     // 1. Gọi API lấy thông tin order
                     var orderInfo = await GetOrderInfoAsync(sendMail.OrderCode);
                     if (orderInfo?.order_info == null)
@@ -281,17 +293,25 @@ namespace Service
                         continue;
                     }
 
-                    // 4. Gửi email
+                    // 4. Gửi email (với rate limiting tự động)
                     await SendOrderNotificationEmailAsync(sendMail.OrderCode, email, orderInfo);
 
                     // 5. Cập nhật status thành Completed
                     await UpdateSendMailStatusAsync(sendMail.OrderCode, "Completed");
 
-                    _logger.LogInfo($"Successfully sent email for order {sendMail.OrderCode} to {email}");
+                    _logger.LogInfo($"✅ Successfully sent email for order {sendMail.OrderCode} to {email}");
+
+                    // ✅ DELAY GIỮA CÁC EMAIL ĐỂ TRÁNH BURST
+                    await Task.Delay(TimeSpan.FromSeconds(30));
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("Rate limit"))
+                {
+                    _logger.LogWarn($"⏸️ Rate limit hit, stopping batch processing. Remaining emails will be processed next cycle.");
+                    break; // Dừng batch hiện tại
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError($"Error processing order {sendMail.OrderCode}: {ex.Message}");
+                    _logger.LogError($"❌ Error processing order {sendMail.OrderCode}: {ex.Message}");
                     await UpdateSendMailStatusAsync(sendMail.OrderCode, "Failed", ex.Message);
                 }
             }
@@ -418,6 +438,7 @@ namespace Service
 
             var message = new Message(new string[] { email }, subject, body, null);
             await _emailSender.SendEmailAsync(message);
+            await Task.Delay(TimeSpan.FromSeconds(30)); // 30 giây delay
         }
         public async Task UpdateSendMailStatusAsync(string orderCode, string status, string? errorMessage = null)
         {

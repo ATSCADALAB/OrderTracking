@@ -1,7 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using EmailService;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Service;
+using Microsoft.Extensions.Options;
 using Service.Contracts;
 
 namespace QuickStart.Services
@@ -10,19 +11,24 @@ namespace QuickStart.Services
     {
         private readonly IServiceScopeFactory _serviceScopeFactory;
         private readonly ILogger<SendMailBackgroundService> _logger;
-        private readonly TimeSpan _period = TimeSpan.FromMinutes(1); // 120 phút
+        private readonly EmailSettings _emailSettings;
 
         public SendMailBackgroundService(
             IServiceScopeFactory serviceScopeFactory,
-            ILogger<SendMailBackgroundService> logger)
+            ILogger<SendMailBackgroundService> logger,
+            IOptions<EmailSettings> emailSettings)
         {
             _serviceScopeFactory = serviceScopeFactory;
             _logger = logger;
+            _emailSettings = emailSettings.Value;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("SendMail Background Service đã bắt đầu chạy mỗi 120 phút");
+            _logger.LogInformation("🚀 SendMail Background Service started with {Hours}-hour interval", _emailSettings.ProcessingIntervalHours);
+
+            // ✅ DELAY KHỞI ĐỘNG 10 PHÚT ĐỂ TRÁNH STARTUP RUSH
+            await Task.Delay(TimeSpan.FromMinutes(10), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -31,24 +37,30 @@ namespace QuickStart.Services
                     using var scope = _serviceScopeFactory.CreateScope();
                     var sendMailService = scope.ServiceProvider.GetRequiredService<ISendMailService>();
 
-                    _logger.LogInformation("Bắt đầu xử lý đơn hàng mới - {Timestamp}", DateTime.Now);
+                    _logger.LogInformation("📧 Starting email processing batch - {Timestamp}", DateTime.Now);
 
                     await sendMailService.ProcessNewOrdersAsync();
 
-                    _logger.LogInformation("Hoàn thành xử lý đơn hàng mới - {Timestamp}", DateTime.Now);
+                    _logger.LogInformation("✅ Completed email processing batch - {Timestamp}", DateTime.Now);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Lỗi khi xử lý SendMail Background Service");
+                    _logger.LogError(ex, "❌ Error in SendMail Background Service");
                 }
 
-                await Task.Delay(_period, stoppingToken);
+                // ✅ RANDOM DELAY ĐỂ TRÁNH PREDICTABLE PATTERN
+                var baseInterval = TimeSpan.FromHours(_emailSettings.ProcessingIntervalHours);
+                var randomDelay = TimeSpan.FromMinutes(Random.Shared.Next(10, 30));
+                var totalDelay = baseInterval + randomDelay;
+
+                _logger.LogInformation("⏰ Next email processing in {TotalMinutes} minutes", totalDelay.TotalMinutes);
+                await Task.Delay(totalDelay, stoppingToken);
             }
         }
 
         public override async Task StopAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("SendMail Background Service đang dừng lại");
+            _logger.LogInformation("🛑 SendMail Background Service is stopping");
             await base.StopAsync(stoppingToken);
         }
     }
