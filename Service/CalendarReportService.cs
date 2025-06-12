@@ -1736,27 +1736,22 @@ namespace Service
                 var plainText = CleanHtmlContentNoPB(description);
 
                 // Tìm pattern PB:số
-                var pbPattern = @"PB\s*:\s*(\d+)";
+                var pbPattern = @"PB\s*:\s*(\d+(?:\.\d+)?)";
                 var match = Regex.Match(plainText, pbPattern, RegexOptions.IgnoreCase);
 
-                if (match.Success && int.TryParse(match.Groups[1].Value, out int pbValue))
+                if (match.Success && decimal.TryParse(match.Groups[1].Value, out decimal pbValue))
                 {
-                    return pbValue switch
-                    {
-                        100 => kpiConfig.Penalty_LightError,  // Lỗi nhẹ
-                        500 => kpiConfig.Penalty_HeavyError,  // Lỗi nặng
-                        0 => kpiConfig.Penalty_NoError,       // Không lỗi
-                        _ => pbValue >= 500 ? kpiConfig.Penalty_HeavyError : kpiConfig.Penalty_LightError
-                    };
+                    // ✅ THAY ĐỔI: Lấy giá trị PB trực tiếp và nhân với 1000
+                    return pbValue * 1000;
                 }
 
-                // Nếu không tìm thấy PB, mặc định không lỗi
-                return kpiConfig.Penalty_NoError;
+                // Nếu không tìm thấy PB, mặc định 0
+                return 0;
             }
             catch (Exception ex)
             {
                 _logger.LogError($"Error extracting penalty from description: {ex.Message}");
-                return kpiConfig.Penalty_NoError;
+                return 0;
             }
         }
         // Phương thức fallback để parse timeline step

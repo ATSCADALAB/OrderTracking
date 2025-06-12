@@ -61,7 +61,7 @@ builder.Services.AddSingleton<IEmailSender>(provider =>
 builder.Services.AddHttpClient<ISendMailService, SendMailService>();
 
 // ✅ BACKGROUND SERVICE VỚI EMAIL SETTINGS
-//builder.Services.AddHostedService<SendMailBackgroundService>();
+builder.Services.AddHostedService<SendMailBackgroundService>();
 
 builder.Services.AddScoped<ValidationFilterAttribute>();
 builder.Services.AddAuthentication();
