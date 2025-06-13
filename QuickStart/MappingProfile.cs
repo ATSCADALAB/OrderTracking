@@ -15,6 +15,7 @@ using SheetOrderDto = Shared.DataTransferObjects.SheetOrder.SheetOrderDto;
 using Shared.DataTransferObjects.CalendarEvent;
 using Shared.DataTransferObjects.KpiConfiguration;
 using Shared.DataTransferObjects.EventExclusion;
+using Shared.DataTransferObjects.EmailCcConfiguration;
 namespace QuickStart
 {
     public class MappingProfile : Profile
@@ -74,6 +75,25 @@ namespace QuickStart
                 .ForMember(dest => dest.Id, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
+            CreateMap<EmailCcConfiguration, EmailCcConfigurationDto>()
+                .ForMember(dest => dest.DefaultCcEmails, opt => opt.Ignore()) // Sẽ xử lý riêng trong service
+                .ForMember(dest => dest.DefaultBccEmails, opt => opt.Ignore()); // Sẽ xử lý riêng trong service
+
+            CreateMap<EmailCcConfigurationForCreationDto, EmailCcConfiguration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.DefaultCcEmails, opt => opt.Ignore()) // Sẽ serialize trong service
+                .ForMember(dest => dest.DefaultBccEmails, opt => opt.Ignore()) // Sẽ serialize trong service
+                .ForMember(dest => dest.CreatedAt, opt => opt.MapFrom(src => DateTime.UtcNow))
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore());
+
+            CreateMap<EmailCcConfigurationForUpdateDto, EmailCcConfiguration>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.ConfigKey, opt => opt.Ignore()) // ConfigKey không được thay đổi
+                .ForMember(dest => dest.DefaultCcEmails, opt => opt.Ignore()) // Sẽ serialize trong service
+                .ForMember(dest => dest.DefaultBccEmails, opt => opt.Ignore()) // Sẽ serialize trong service
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedBy, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
         }
     }
 }

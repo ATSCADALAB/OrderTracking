@@ -495,15 +495,10 @@ namespace Service
             catch (Exception ex)
             {
                 _logger.LogError($"Error getting CC configuration: {ex.Message}");
-                // Tiếp tục gửi email mà không có CC nếu có lỗi
             }
-
-            // ✅ TẠO MESSAGE VỚI CC (SỬ DỤNG MESSAGE CLASS CŨ)
-            // Vì Message class hiện tại chưa hỗ trợ CC, ta cần cập nhật hoặc tạm thời thêm CC vào TO
             var allRecipients = new List<string> { email };
             if (ccEmails.Any())
             {
-                // TẠMM THỜI: Thêm CC vào TO list (không lý tưởng nhưng hoạt động được)
                 allRecipients.AddRange(ccEmails.Distinct());
                 _logger.LogInfo($"📧 Added CC emails to recipient list: {string.Join(", ", ccEmails)}");
             }
