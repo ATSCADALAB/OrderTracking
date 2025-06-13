@@ -17,6 +17,7 @@
         ICalendarEventService CalendarEventService { get; }
         IKpiConfigurationService KpiConfigurationService { get; }
         IEventExclusionKeywordService EventExclusionKeywordService { get; }
+        IEmailCcConfigurationService EmailCcConfigurationService { get; }
         ISendMailService SendMailService { get; }
     }
 }

@@ -102,7 +102,22 @@ namespace EmailService
         {
             var emailMessage = new MimeMessage();
             emailMessage.From.Add(new MailboxAddress("email", _emailConfig.From));
+
+            // Thêm người nhận chính
             emailMessage.To.AddRange(message.To);
+
+            // ✅ THÊM CC
+            if (message.Cc?.Any() == true)
+            {
+                emailMessage.Cc.AddRange(message.Cc);
+            }
+
+            // ✅ THÊM BCC
+            if (message.Bcc?.Any() == true)
+            {
+                emailMessage.Bcc.AddRange(message.Bcc);
+            }
+
             emailMessage.Subject = message.Subject;
 
             var bodyBuilder = new BodyBuilder { HtmlBody = string.Format("<h2 style='color:red;'>{0}</h2>", message.Content) };

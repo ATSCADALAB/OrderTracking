@@ -17,7 +17,7 @@ namespace Repository
         private readonly Lazy<ISendMailRepository> _sendMailRepository;
         private readonly Lazy<IKpiConfigurationRepository> _kpiConfigurationRepository;
         private readonly Lazy<IEventExclusionKeywordRepository> _eventExclusionKeywordRepository;
-
+        private readonly Lazy<IEmailCcConfigurationRepository> _emailCcConfigurationRepository;
 
         public RepositoryManager(RepositoryContext repositoryContext, RoleManager<UserRole> roleManager)
         {
@@ -32,7 +32,9 @@ namespace Repository
             _sendMailRepository = new Lazy<ISendMailRepository>(() => new SendMailRepository(repositoryContext));
             _kpiConfigurationRepository = new Lazy<IKpiConfigurationRepository>(() => new KpiConfigurationRepository(repositoryContext));
             _eventExclusionKeywordRepository = new Lazy<IEventExclusionKeywordRepository>(() => new EventExclusionKeywordRepository(repositoryContext));
+            _emailCcConfigurationRepository = new Lazy<IEmailCcConfigurationRepository>(() => new EmailCcConfigurationRepository(_repositoryContext));
         }
+        public IEmailCcConfigurationRepository EmailCcConfiguration => _emailCcConfigurationRepository.Value;
         public IUserCalendarRepository UserCalendar => _userCalendarRepository.Value;
         public ICategoryRepository Category => _categoryRepository.Value;
         public IPermissionRepository Permission => _permissionRepository.Value;

@@ -85,7 +85,7 @@ namespace Repository
         public DbSet<SendMail> SendMails { get; set; } = default!;
         public DbSet<KpiConfiguration> KpiConfigurations { get; set; } = default!;
         public DbSet<EventExclusionKeyword> EventExclusionKeywords { get; set; } = default!;
-
+        public DbSet<EmailCcConfiguration> EmailCcConfigurations { get; set; }
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var modifiedEntities = ChangeTracker.Entries()

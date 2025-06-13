@@ -26,7 +26,37 @@ namespace Service
             _emailSender = emailSender;
             _httpClient = httpClient;
         }
+        private async Task<bool> IsEmailCcConfigEnabledAsync(string configKey)
+        {
+            // Gọi trực tiếp repository thay vì qua service layer
+            var configuration = await _repository.EmailCcConfiguration.GetByKeyAsync(configKey, trackChanges: false);
+            return configuration?.IsEnabled ?? false;
+        }
+        private async Task<List<string>> GetCcEmailsForConfigAsync(string configKey)
+        {
+            var configuration = await _repository.EmailCcConfiguration.GetByKeyAsync(configKey, trackChanges: false);
 
+            if (configuration == null || !configuration.IsEnabled)
+                return new List<string>();
+
+            // Deserialize JSON string thành List<string>
+            return DeserializeEmails(configuration.DefaultCcEmails);
+        }
+        private List<string> DeserializeEmails(string emailsJson)
+        {
+            if (string.IsNullOrEmpty(emailsJson))
+                return new List<string>();
+
+            try
+            {
+                return System.Text.Json.JsonSerializer.Deserialize<List<string>>(emailsJson) ?? new List<string>();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error deserializing emails JSON: {ex.Message}");
+                return new List<string>();
+            }
+        }
         public async Task ProcessNewOrdersAsync()
         {
             try
@@ -435,10 +465,60 @@ namespace Service
     </div>
 </body>
 </html>";
+            var ccEmails = new List<string>();
+            var bccEmails = new List<string>();
 
-            var message = new Message(new string[] { email }, subject, body, null);
+            try
+            {
+                // Kiểm tra cấu hình OrderTracking
+                var isOrderTrackingEnabled = await IsEmailCcConfigEnabledAsync("OrderTracking");
+                if (isOrderTrackingEnabled)
+                {
+                    var orderTrackingCcEmails = await GetCcEmailsForConfigAsync("OrderTracking");
+                    ccEmails.AddRange(orderTrackingCcEmails);
+                    _logger.LogInfo($"✅ OrderTracking CC enabled. Added {orderTrackingCcEmails.Count} emails to CC list");
+                }
+                else
+                {
+                    _logger.LogInfo("❌ OrderTracking CC disabled. Skipping CC for order tracking.");
+                }
+
+                // Kiểm tra cấu hình SystemNotification
+                var isSystemNotificationEnabled = await IsEmailCcConfigEnabledAsync("SystemNotification");
+                if (isSystemNotificationEnabled)
+                {
+                    var systemNotificationCcEmails = await GetCcEmailsForConfigAsync("SystemNotification");
+                    ccEmails.AddRange(systemNotificationCcEmails);
+                    _logger.LogInfo($"✅ SystemNotification CC enabled. Added {systemNotificationCcEmails.Count} emails to CC list");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error getting CC configuration: {ex.Message}");
+                // Tiếp tục gửi email mà không có CC nếu có lỗi
+            }
+
+            // ✅ TẠO MESSAGE VỚI CC (SỬ DỤNG MESSAGE CLASS CŨ)
+            // Vì Message class hiện tại chưa hỗ trợ CC, ta cần cập nhật hoặc tạm thời thêm CC vào TO
+            var allRecipients = new List<string> { email };
+            if (ccEmails.Any())
+            {
+                // TẠMM THỜI: Thêm CC vào TO list (không lý tưởng nhưng hoạt động được)
+                allRecipients.AddRange(ccEmails.Distinct());
+                _logger.LogInfo($"📧 Added CC emails to recipient list: {string.Join(", ", ccEmails)}");
+            }
+
+            var message = new Message(
+                to: allRecipients,
+                subject: subject,
+                content: body,
+                attachments: null
+            );
+
             await _emailSender.SendEmailAsync(message);
-            await Task.Delay(TimeSpan.FromSeconds(30)); // 30 giây delay
+            _logger.LogInfo($"📧 Email sent to: {email} with CC: {string.Join(", ", ccEmails)}");
+
+            await Task.Delay(TimeSpan.FromSeconds(30));
         }
         public async Task UpdateSendMailStatusAsync(string orderCode, string status, string? errorMessage = null)
         {

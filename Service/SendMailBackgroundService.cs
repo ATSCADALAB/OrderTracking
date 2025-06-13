@@ -50,7 +50,7 @@ namespace QuickStart.Services
 
                 // ✅ RANDOM DELAY ĐỂ TRÁNH PREDICTABLE PATTERN
                 var baseInterval = TimeSpan.FromHours(_emailSettings.ProcessingIntervalHours);
-                var randomDelay = TimeSpan.FromMinutes(Random.Shared.Next(10, 30));
+                var randomDelay = TimeSpan.FromMinutes(Random.Shared.Next(1, 5));
                 var totalDelay = baseInterval + randomDelay;
 
                 _logger.LogInformation("⏰ Next email processing in {TotalMinutes} minutes", totalDelay.TotalMinutes);

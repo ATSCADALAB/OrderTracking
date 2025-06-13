@@ -12,6 +12,7 @@
         ISendMailRepository SendMail { get; }
         IKpiConfigurationRepository KpiConfiguration { get; }
         IEventExclusionKeywordRepository EventExclusionKeyword { get; }
+        IEmailCcConfigurationRepository EmailCcConfiguration { get; }
         Task SaveAsync();
     }
 }

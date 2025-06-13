@@ -763,6 +763,10 @@ namespace Service
         }
         private DateTime? GetLastTimelineDate(string description)
         {
+            if (description.Contains("Chatling"))
+            {
+
+            }
             if (string.IsNullOrWhiteSpace(description))
                 return null;
 
@@ -1427,26 +1431,66 @@ namespace Service
 
             var entries = new List<string>();
 
-            // Trước tiên thử tách bằng line breaks thông thường
-            var lines = timelineText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-
-            // Nếu chỉ có 1 dòng (không có line breaks), tách bằng pattern "- DD/MM/YYYY:"
-            if (lines.Length == 1)
+            try
             {
-                // FIXED: Tìm tất cả vị trí bắt đầu của "- DD/MM/YYYY:" và tách chính xác
-                var datePattern = @"- (\d{1,2}\/\d{1,2}\/\d{2,4}):";
-                var matches = Regex.Matches(timelineText, datePattern);
+                // Bước 1: Thử tách bằng line breaks thông thường
+                var lines = timelineText.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
 
-                if (matches.Count > 0)
+                // Bước 2: Lọc các dòng có chứa pattern timeline hợp lệ
+                var validLines = lines.Where(line =>
+                    !string.IsNullOrWhiteSpace(line) &&
+                    Regex.IsMatch(line.Trim(), @".*(\d{1,2}\/\d{1,2}\/\d{2,4}).*")).ToList();
+
+                // Bước 3: Nếu có nhiều dòng hợp lệ, sử dụng split thông thường
+                if (validLines.Count > 1)
                 {
-                    // Tách timeline từ vị trí match đến match tiếp theo
-                    for (int i = 0; i < matches.Count; i++)
+                    Console.WriteLine($"Split by line breaks: found {validLines.Count} valid lines");
+                    return validLines.Select(line => line.Trim()).Where(line => !string.IsNullOrWhiteSpace(line)).ToList();
+                }
+
+                // Bước 4: Nếu chỉ có 1 dòng hoặc không có line breaks, dùng regex pattern
+                Console.WriteLine("Using regex pattern to split timeline entries");
+
+                // Các pattern khác nhau để xử lý nhiều trường hợp
+                var patterns = new[]
+                {
+            @"- (\d{1,2}\/\d{1,2}\/\d{2,4})\s*:",    // "- DD/MM/YYYY :"
+            @"-(\d{1,2}\/\d{1,2}\/\d{2,4})\s*:",     // "-DD/MM/YYYY :"
+            @"(\d{1,2}\/\d{1,2}\/\d{2,4})\s*:",      // "DD/MM/YYYY :"
+        };
+
+                Regex bestPattern = null;
+                MatchCollection bestMatches = null;
+
+                // Tìm pattern có nhiều match nhất
+                foreach (var pattern in patterns)
+                {
+                    var regex = new Regex(pattern);
+                    var matches = regex.Matches(timelineText);
+
+                    if (matches.Count > 0 && (bestMatches == null || matches.Count > bestMatches.Count))
                     {
-                        var startIndex = matches[i].Index;
-                        var endIndex = (i + 1 < matches.Count) ? matches[i + 1].Index : timelineText.Length;
+                        bestPattern = regex;
+                        bestMatches = matches;
+                    }
+                }
+
+                if (bestMatches != null && bestMatches.Count > 0)
+                {
+                    Console.WriteLine($"Found {bestMatches.Count} matches with pattern");
+
+                    // Tách timeline từ vị trí match đến match tiếp theo
+                    for (int i = 0; i < bestMatches.Count; i++)
+                    {
+                        var startIndex = bestMatches[i].Index;
+                        var endIndex = (i + 1 < bestMatches.Count) ? bestMatches[i + 1].Index : timelineText.Length;
 
                         var entry = timelineText.Substring(startIndex, endIndex - startIndex).Trim();
-                        if (!string.IsNullOrWhiteSpace(entry))
+
+                        // Làm sạch entry
+                        entry = CleanTimelineEntry(entry);
+
+                        if (!string.IsNullOrWhiteSpace(entry) && ContainsValidDate(entry))
                         {
                             entries.Add(entry);
                         }
@@ -1454,14 +1498,89 @@ namespace Service
                 }
                 else
                 {
-                    // Nếu không tìm thấy pattern, return toàn bộ text
-                    entries.Add(timelineText.Trim());
+                    // Bước 5: Fallback - thử tách bằng các ký tự phân cách khác
+                    Console.WriteLine("No regex pattern matched, trying fallback methods");
+
+                    var fallbackEntries = TryFallbackSplit(timelineText);
+                    if (fallbackEntries.Any())
+                    {
+                        entries.AddRange(fallbackEntries);
+                    }
+                    else
+                    {
+                        // Cuối cùng - return toàn bộ text nếu không tách được
+                        Console.WriteLine("All methods failed, returning original text");
+                        entries.Add(timelineText.Trim());
+                    }
                 }
             }
-            else
+            catch (Exception ex)
             {
-                // Nếu có line breaks, sử dụng cách tách thông thường
-                entries = lines.Where(line => !string.IsNullOrWhiteSpace(line)).ToList();
+                Console.WriteLine($"Error in SplitTimelineEntries: {ex.Message}");
+                // Fallback an toàn
+                entries.Add(timelineText.Trim());
+            }
+
+            Console.WriteLine($"Final result: {entries.Count} entries");
+            return entries;
+        }
+
+        private string CleanTimelineEntry(string entry)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+                return entry;
+
+            // Loại bỏ các ký tự không mong muốn ở đầu và cuối
+            entry = entry.Trim();
+
+            // Đảm bảo entry bắt đầu bằng dấu "-" nếu có ngày
+            if (Regex.IsMatch(entry, @"^\d{1,2}\/\d{1,2}\/\d{2,4}"))
+            {
+                entry = "- " + entry;
+            }
+
+            return entry;
+        }
+
+        private bool ContainsValidDate(string entry)
+        {
+            if (string.IsNullOrWhiteSpace(entry))
+                return false;
+
+            return Regex.IsMatch(entry, @"\d{1,2}\/\d{1,2}\/\d{2,4}");
+        }
+
+        private List<string> TryFallbackSplit(string timelineText)
+        {
+            var entries = new List<string>();
+
+            try
+            {
+                // Thử tách bằng các marker khác
+                var fallbackPatterns = new[]
+                {
+            @"(?=\d{1,2}\/\d{1,2}\/\d{2,4})",  // Tách trước mỗi ngày
+            @"(?=- \d{1,2}\/\d{1,2}\/\d{2,4})", // Tách trước "- ngày"
+            @"\[v\]\s*(?=\d{1,2}\/\d{1,2}\/\d{2,4})", // Tách sau [v] và trước ngày tiếp theo
+        };
+
+                foreach (var pattern in fallbackPatterns)
+                {
+                    var parts = Regex.Split(timelineText, pattern, RegexOptions.IgnoreCase)
+                        .Where(part => !string.IsNullOrWhiteSpace(part) && ContainsValidDate(part))
+                        .Select(part => CleanTimelineEntry(part))
+                        .ToList();
+
+                    if (parts.Count > 1)
+                    {
+                        Console.WriteLine($"Fallback pattern worked: found {parts.Count} parts");
+                        return parts;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error in fallback split: {ex.Message}");
             }
 
             return entries;
