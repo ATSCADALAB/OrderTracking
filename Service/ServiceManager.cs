@@ -56,7 +56,7 @@ namespace Service
             _auditService = new Lazy<IAuditService>(() => new AuditService(repositoryManager, logger, mapper));
             _userCalendarService = new Lazy<IUserCalendarService>(() => new UserCalendarService(repositoryManager, logger, mapper));
             _wcfService = new Lazy<IWcfService>(() => new WcfService(configuration, hubContext));
-            _calendarReportService = new Lazy<ICalendarReportService>(() => new CalendarReportService(repositoryManager, logger, mapper,evn));
+            _calendarReportService = new Lazy<ICalendarReportService>(() => new CalendarReportService(userManager,repositoryManager, logger, mapper,evn));
             _sheetOrderService = new Lazy<ISheetOrderService>(() => new SheetOrderService(repositoryManager, mapper));
             _calendarEventService = new Lazy<ICalendarEventService>(() => new CalendarEventService(repositoryManager, mapper));
             _sendMailService = new Lazy<ISendMailService>(() => new SendMailService(repositoryManager, logger, emailSender, httpClient));

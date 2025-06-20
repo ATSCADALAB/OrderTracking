@@ -28,7 +28,7 @@ namespace QuickStart.Services
             _logger.LogInformation("🚀 SendMail Background Service started with {Hours}-hour interval", _emailSettings.ProcessingIntervalHours);
 
             // ✅ DELAY KHỞI ĐỘNG 10 PHÚT ĐỂ TRÁNH STARTUP RUSH
-            await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+            await Task.Delay(TimeSpan.FromMinutes(100), stoppingToken);
 
             while (!stoppingToken.IsCancellationRequested)
             {

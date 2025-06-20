@@ -21,24 +21,27 @@ using Color = Google.Apis.Sheets.v4.Data.Color;
 using Microsoft.Extensions.Caching.Memory;
 using Entities.Models;
 using Microsoft.Extensions.FileSystemGlobbing.Internal;
+using Entities.Identity;
+using Microsoft.AspNetCore.Identity;
 
 namespace Service
 {
     internal sealed class CalendarReportService : ICalendarReportService
     {
         #region Private Fields and Constructor
-
+        private readonly UserManager<User> _userManager;
         private readonly string _googleAuthPath;
         private readonly IRepositoryManager _repository;
         private readonly ILoggerManager _logger;
         private readonly IMapper _mapper;
         private readonly string _spreadsheetId = "18zOiaW16z1-cmmDfzOC3_aPd8SJNZj432d3uvw7M8YY";
 
-        public CalendarReportService(IRepositoryManager repository, ILoggerManager logger, IMapper mapper, IWebHostEnvironment env)
+        public CalendarReportService(UserManager<User> userManager,IRepositoryManager repository, ILoggerManager logger, IMapper mapper, IWebHostEnvironment env)
         {
             _repository = repository;
             _logger = logger;
             _mapper = mapper;
+            _userManager = userManager;
             _googleAuthPath = Path.Combine(env.ContentRootPath, "GoogleAuth");
         }
 
@@ -569,16 +572,48 @@ namespace Service
 
         #region KPI and Report Generation Methods
 
-        public async Task<IEnumerable<CalendarUserKpiDto>> GetUserKpiReportAsync(DateTime startDate, DateTime endDate)
+        public async Task<IEnumerable<CalendarUserKpiDto>> GetUserKpiReportAsync(DateTime startDate, DateTime endDate, string currentUserId)
         {
             // Lấy KPI configuration
             var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
             if (kpiConfig == null)
                 throw new Exception("No active KPI configuration found");
 
+            // ✅ LẤY ROLE CỦA USER TỪ DATABASE
+            var user = await _userManager.FindByIdAsync(currentUserId);
+            if (user == null)
+                throw new Exception("User not found");
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            string userRole = userRoles.FirstOrDefault() ?? "User"; // Default là User nếu không có role
+
             // Lấy TẤT CẢ users từ UserCalendar
             var userCalendarList = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
             var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendarList);
+
+            // ✅ FILTER THEO ROLE
+            if (userRole == "User")
+            {
+                // Nếu là User role, chỉ lấy calendar của user đó thôi
+                var currentUserCalendar = userCalendarList.FirstOrDefault(u => u.UserId == currentUserId);
+                if (currentUserCalendar != null)
+                {
+                    var currentUserDto = _mapper.Map<UserCalendarDto>(currentUserCalendar);
+                    userCalendarDto = new[] { currentUserDto }; // Chỉ xử lý user này
+                }
+                else
+                {
+                    return new List<CalendarUserKpiDto>(); // User không có calendar
+                }
+            }
+            //// Lấy KPI configuration
+            //var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
+            //if (kpiConfig == null)
+            //    throw new Exception("No active KPI configuration found");
+
+            //// Lấy TẤT CẢ users từ UserCalendar
+            //var userCalendarList = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
+            //var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendarList);
 
             // ✅ KHỞI TẠO KẾT QUẢ CHO TẤT CẢ USERS TRƯỚC
             var result = new List<CalendarUserKpiDto>();

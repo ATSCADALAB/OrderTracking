@@ -3,11 +3,14 @@ using Service.Contracts;
 using Hangfire;
 using QuickStart.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Authorization;
+using System.IdentityModel.Claims;
 
 namespace QuickStart.Presentation.Controllers
 {
     [Route("api/calendar-report")]
     [ApiController]
+
     public class CalendarReportController : ControllerBase
     {
         private readonly IServiceManager _service;
@@ -28,9 +31,21 @@ namespace QuickStart.Presentation.Controllers
         }
 
         [HttpGet("kpi-summary")]
+        [Authorize]
         public async Task<IActionResult> GetKpiSummary([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
         {
-            var result = await _service.CalendarReportService.GetUserKpiReportAsync(startDate, endDate);
+
+            // Chỉ cần lấy userId từ JWT token
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User ID not found in token");
+            }
+
+            // Service tự lấy role của user này từ database
+            var result = await _service.CalendarReportService.GetUserKpiReportAsync(startDate, endDate, userId);
+
             return Ok(result);
         }
 
