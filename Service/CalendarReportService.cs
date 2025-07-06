@@ -832,14 +832,42 @@ namespace Service
                 return null;
             }
         }
-        public async Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate)
+        public async Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate, string currentUserId)
         {
+            //var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
+            //if (kpiConfig == null)
+            //    throw new Exception("No active KPI configuration found");
+
+            //var userCalendar = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
+            //var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendar);
             var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
             if (kpiConfig == null)
                 throw new Exception("No active KPI configuration found");
 
-            var userCalendar = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
-            var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendar);
+            // ✅ LẤY ROLE CỦA USER TỪ DATABASE
+            var user = await _userManager.FindByIdAsync(currentUserId);
+            if (user == null)
+                throw new Exception("User not found");
+
+            var userRoles = await _userManager.GetRolesAsync(user);
+            string userRole = userRoles.FirstOrDefault() ?? "User"; // Default là User nếu không có role
+
+            // Lấy TẤT CẢ users từ UserCalendar
+            var userCalendarList = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
+            var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendarList);
+
+            // ✅ FILTER THEO ROLE
+            if (userRole == "User")
+            {
+                // Nếu là User role, chỉ lấy calendar của user đó thôi
+                var currentUserCalendar = userCalendarList.FirstOrDefault(u => u.UserId == currentUserId);
+                if (currentUserCalendar != null)
+                {
+                    var currentUserDto = _mapper.Map<UserCalendarDto>(currentUserCalendar);
+                    userCalendarDto = new[] { currentUserDto }; // Chỉ xử lý user này
+                }
+                
+            }
 
             UserCredential credential;
             using (var stream = new FileStream(Path.Combine(_googleAuthPath, "credentials.json"), FileMode.Open, FileAccess.Read))

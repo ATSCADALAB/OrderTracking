@@ -25,7 +25,14 @@ namespace QuickStart.Presentation.Controllers
         [HttpGet("export")]
         public async Task<IActionResult> Export([FromQuery] DateTime startDate, [FromQuery] DateTime endDate)
         {
-            var fileBytes = await _service.CalendarReportService.GenerateReportAsync(startDate, endDate);
+            // Chỉ cần lấy userId từ JWT token
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User ID not found in token");
+            }
+            var fileBytes = await _service.CalendarReportService.GenerateReportAsync(startDate, endDate, userId);
             var fileName = $"user_order_report_{DateTime.Now:yyyyMMddHHmmss}.xlsx";
             return File(fileBytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", fileName);
         }

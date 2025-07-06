@@ -8,7 +8,7 @@ namespace Service.Contracts
 {
     public interface ICalendarReportService
     {
-        Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate);
+        Task<byte[]> GenerateReportAsync(DateTime startDate, DateTime endDate, string currentUserId);
         Task<IEnumerable<CalendarUserKpiDto>> GetUserKpiReportAsync(DateTime startDate, DateTime endDate, string currentUserId);
         Task<UnifiedOrderDto?> SearchOrderFromAllSourcesAsync(string orderCode);
         Task SyncSheetOrdersAsync(CancellationToken cancellationToken);

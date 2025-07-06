@@ -452,7 +452,7 @@ namespace Service
             
             <div class='tracking-section'>
                 <h3>🔍 Theo dõi tiến độ đơn hàng</h3>
-                <a href='https://atlink.asia/OrderTracking/find?order={orderInfo.order_info.order_code}' class='tracking-link'>
+                <a href='https://atlink.asia/ot/find?order={orderInfo.order_info.order_code}' class='tracking-link'>
                     Theo dõi đơn hàng ngay
                 </a>
             </div>
