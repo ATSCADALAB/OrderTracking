@@ -19,5 +19,6 @@
         IEventExclusionKeywordService EventExclusionKeywordService { get; }
         IEmailCcConfigurationService EmailCcConfigurationService { get; }
         ISendMailService SendMailService { get; }
+        IEmployeeService EmployeeService { get; }
     }
 }

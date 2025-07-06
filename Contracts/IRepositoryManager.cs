@@ -13,6 +13,7 @@
         IKpiConfigurationRepository KpiConfiguration { get; }
         IEventExclusionKeywordRepository EventExclusionKeyword { get; }
         IEmailCcConfigurationRepository EmailCcConfiguration { get; }
+        IEmployeeRepository Employee { get; }
         Task SaveAsync();
     }
 }

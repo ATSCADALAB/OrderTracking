@@ -16,6 +16,7 @@ using Shared.DataTransferObjects.CalendarEvent;
 using Shared.DataTransferObjects.KpiConfiguration;
 using Shared.DataTransferObjects.EventExclusion;
 using Shared.DataTransferObjects.EmailCcConfiguration;
+using Shared.DataTransferObjects.Employee;
 namespace QuickStart
 {
     public class MappingProfile : Profile
@@ -94,6 +95,31 @@ namespace QuickStart
                 .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
                 .ForMember(dest => dest.CreatedBy, opt => opt.Ignore())
                 .ForMember(dest => dest.UpdatedAt, opt => opt.MapFrom(src => DateTime.UtcNow));
+
+            CreateMap<Employee, EmployeeDto>()
+        .ForMember(dest => dest.Status, opt => opt.MapFrom(src => src.Status.ToString()));
+
+            CreateMap<EmployeeForCreationDto, Employee>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.ProbationEndDate, opt => opt.Ignore())
+                .ForMember(dest => dest.FirstYearEndDate, opt => opt.Ignore())
+                .ForMember(dest => dest.Status, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedBy, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedBy, opt => opt.Ignore());
+
+            CreateMap<EmployeeForUpdateDto, Employee>()
+                .ForMember(dest => dest.Id, opt => opt.Ignore())
+                .ForMember(dest => dest.EmployeeCode, opt => opt.Ignore())
+                .ForMember(dest => dest.StartDate, opt => opt.Ignore())
+                .ForMember(dest => dest.ProbationEndDate, opt => opt.Ignore())
+                .ForMember(dest => dest.FirstYearEndDate, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedAt, opt => opt.Ignore())
+                .ForMember(dest => dest.CreatedBy, opt => opt.Ignore())
+                .ForMember(dest => dest.UpdatedBy, opt => opt.Ignore())
+                .ForMember(dest => dest.Status, opt => opt.MapFrom(src => (EmployeeStatus)src.Status));
         }
     }
 }

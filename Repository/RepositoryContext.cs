@@ -19,6 +19,14 @@ namespace Repository
         {
             base.OnModelCreating(modelBuilder);
 
+            modelBuilder.Entity<Employee>(entity =>
+            {
+                entity.HasIndex(e => e.EmployeeCode).IsUnique();
+                entity.HasIndex(e => e.Email).IsUnique();
+
+                entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP");
+            });
 
             // Cấu hình các phần phân quyền người dùng
             modelBuilder.Entity<RolePermission>()
@@ -86,6 +94,7 @@ namespace Repository
         public DbSet<KpiConfiguration> KpiConfigurations { get; set; } = default!;
         public DbSet<EventExclusionKeyword> EventExclusionKeywords { get; set; } = default!;
         public DbSet<EmailCcConfiguration> EmailCcConfigurations { get; set; }
+        public DbSet<Employee> Employees { get; set; } = default!;
         public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         {
             var modifiedEntities = ChangeTracker.Entries()
