@@ -9,7 +9,6 @@ namespace QuickStart.Presentation.Controllers
 {
     [Route("api/employees")]
     [ApiController]
-    [Authorize] // Yêu cầu đăng nhập
     public class EmployeeController : ControllerBase
     {
         private readonly IServiceManager _service;
