@@ -316,11 +316,10 @@ namespace Service
                     {
                         email = accountInfo.contacts.FirstOrDefault(c => !string.IsNullOrEmpty(c.email))?.email;
                     }
-                    email = null;
                     if (string.IsNullOrEmpty(email))
                     {
                         await UpdateSendMailStatusAsync(sendMail.OrderCode, "Failed", "No email found");
-                        await SendOrderNotificationEmailAsync(sendMail.OrderCode, "hai2000.dev@gmail.com", orderInfo);
+                        await SendOrderNotificationEmailAsync(sendMail.OrderCode, "soft@atpro.com.vn", orderInfo);
                         await Task.Delay(TimeSpan.FromSeconds(30));
                         continue;
                     }
