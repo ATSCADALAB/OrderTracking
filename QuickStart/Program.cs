@@ -83,7 +83,7 @@ builder.Services.AddScoped<AuthorizePermissionAttribute>(provider =>
     ));
 // === THÊM HANGFIRE CONFIGURATION ===
 // Đăng ký HangfireSyncService
-builder.Services.AddScoped<HangfireSyncService>();
+//builder.Services.AddScoped<HangfireSyncService>();
 
 // Cấu hình Hangfire cho MySQL
 builder.Services.AddHangfire(configuration => configuration
@@ -178,10 +178,10 @@ app.UseEndpoints(endpoints =>
 });
 
 app.UseSwagger();
-app.UseSwaggerUI(s =>
-{
-    s.SwaggerEndpoint("/swagger/v1/swagger.json", "Matech Coding API v1");
-});
+//app.UseSwaggerUI(s =>
+//{
+//    s.SwaggerEndpoint("/swagger/v1/swagger.json", "Matech Coding API v1");
+//});
 
 app.Use(next => context =>
 {

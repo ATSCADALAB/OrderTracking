@@ -404,6 +404,9 @@ namespace Service
         {
             var subject = $"Thông báo đơn hàng {orderCode} - Công ty Cổ Phần Giải Pháp Kỹ Thuật Ấn Tượng";
 
+            // ✅ TẠO TÊN HIỂN THỊ CHO KHÁCH HÀNG CHÍNH
+            string recipientDisplayName = await GetRecipientDisplayNameAsync(email, orderInfo);
+
             var body = $@"
 <!DOCTYPE html>
 <html>
@@ -444,7 +447,7 @@ namespace Service
         <div class='content'>
             <h2 style='color: #495057;'>Xin chào {orderInfo.order_info.account_name},</h2>
             <p style='color: #6c757d; line-height: 1.6; font-size: 16px;'>
-                Đơn hàng của quý khách đã được chuyển giao sản xuất.
+                Đơn hàng của Quý khách đã được chuyển giao sản xuất.
             </p>
             
             <div class='order-code'>
@@ -466,6 +469,7 @@ namespace Service
     </div>
 </body>
 </html>";
+
             var ccEmails = new List<string>();
             var bccEmails = new List<string>();
 
@@ -497,24 +501,102 @@ namespace Service
             {
                 _logger.LogError($"Error getting CC configuration: {ex.Message}");
             }
-            var allRecipients = new List<string> { email };
+
+            // ✅ TẠO DICTIONARY CHO KHÁCH HÀNG CHÍNH VỚI TÊN HIỂN THỊ
+            var recipientWithName = new Dictionary<string, string>
+    {
+        { email, recipientDisplayName }
+    };
+
+            // ✅ TẠO MESSAGE VỚI TÊN HIỂN THỊ CHO KHÁCH HÀNG
+            var message = new Message(recipientWithName, subject, body);
+
+            // ✅ THÊM CC EMAILS (GIỮ NGUYÊN DẠNG USERNAME CHO EMAIL NỘI BỘ)
             if (ccEmails.Any())
             {
-                allRecipients.AddRange(ccEmails.Distinct());
-                _logger.LogInfo($"📧 Added CC emails to recipient list: {string.Join(", ", ccEmails)}");
+                var uniqueCcEmails = ccEmails.Distinct().ToList();
+                message.AddCc(uniqueCcEmails);
+                _logger.LogInfo($"📧 Added CC emails to recipient list: {string.Join(", ", uniqueCcEmails)}");
             }
 
-            var message = new Message(
-                to: allRecipients,
-                subject: subject,
-                content: body,
-                attachments: null
-            );
-
             await _emailSender.SendEmailAsync(message);
-            _logger.LogInfo($"📧 Email sent to: {email} with CC: {string.Join(", ", ccEmails)}");
+            _logger.LogInfo($"📧 Email sent to: {recipientDisplayName} <{email}> with CC: {string.Join(", ", ccEmails)}");
 
             await Task.Delay(TimeSpan.FromSeconds(30));
+        }
+
+        // ✅ THÊM CÁC PHƯƠNG THỨC HỖ TRỢ VÀO CUỐI CLASS SendMailService
+
+        /// <summary>
+        /// Lấy tên hiển thị cho khách hàng từ CRM hoặc tự động từ email
+        /// </summary>
+        private async Task<string> GetRecipientDisplayNameAsync(string email, OrderApiResponse orderInfo)
+        {
+            // Ưu tiên 1: Lấy tên từ Contact trong CRM (chi tiết nhất - first_name + last_name)
+            var contactName = await GetContactDisplayNameAsync(email, orderInfo.order_info.account_code);
+            if (!string.IsNullOrEmpty(contactName))
+            {
+                return contactName; // VD: "Trần Đức Hải"
+            }
+
+            // Ưu tiên 2: Sử dụng account_name từ CRM (tên công ty/tổ chức)
+            if (!string.IsNullOrEmpty(orderInfo?.order_info?.account_name))
+            {
+                return orderInfo.order_info.account_name; // VD: "Công ty ABC"
+            }
+
+            // Ưu tiên 3: Tự động từ email (chỉ cho khách hàng)
+            if (!string.IsNullOrEmpty(email) && email.Contains("@"))
+            {
+                var localPart = email.Split('@')[0];
+
+                // Xử lý email dạng: hai2000.dev → "Hai Dev"
+                var cleanName = System.Text.RegularExpressions.Regex.Replace(localPart, @"[\d\._\-]+", " ");
+                cleanName = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(cleanName.Trim());
+
+                if (!string.IsNullOrWhiteSpace(cleanName))
+                {
+                    return cleanName;
+                }
+            }
+            if(email== "soft@atpro.com.vn")
+            {
+                return "ATPRO";
+            }
+            // Fallback cuối cùng
+            return "Khách hàng";
+        }
+
+        /// <summary>
+        /// Lấy tên từ Contact trong AccountInfo CRM
+        /// </summary>
+        private async Task<string> GetContactDisplayNameAsync(string email, string accountCode)
+        {
+            try
+            {
+                var accountInfo = await GetAccountInfoAsync(accountCode);
+
+                if (accountInfo?.contacts != null)
+                {
+                    var contact = accountInfo.contacts.FirstOrDefault(c =>
+                        string.Equals(c.email, email, StringComparison.OrdinalIgnoreCase));
+
+                    if (contact != null)
+                    {
+                        var fullName = $"{contact.first_name} {contact.last_name}".Trim();
+                        if (!string.IsNullOrEmpty(fullName))
+                        {
+                            return fullName;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarn($"Cannot get contact name for email {email}: {ex.Message}");
+            }
+
+            return null;
         }
         public async Task UpdateSendMailStatusAsync(string orderCode, string status, string? errorMessage = null)
         {

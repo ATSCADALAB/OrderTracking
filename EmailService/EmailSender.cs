@@ -101,7 +101,7 @@ namespace EmailService
         private MimeMessage CreateEmailMessage(Message message)
         {
             var emailMessage = new MimeMessage();
-            emailMessage.From.Add(new MailboxAddress("email", _emailConfig.From));
+            emailMessage.From.Add(_emailConfig.GetFromMailboxAddress());
 
             // Thêm người nhận chính
             emailMessage.To.AddRange(message.To);

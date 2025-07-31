@@ -606,15 +606,6 @@ namespace Service
                     return new List<CalendarUserKpiDto>(); // User không có calendar
                 }
             }
-            //// Lấy KPI configuration
-            //var kpiConfig = await _repository.KpiConfiguration.GetActiveConfigurationAsync(false);
-            //if (kpiConfig == null)
-            //    throw new Exception("No active KPI configuration found");
-
-            //// Lấy TẤT CẢ users từ UserCalendar
-            //var userCalendarList = (await _repository.UserCalendar.GetUserCalendarsAsync(false)).ToList();
-            //var userCalendarDto = _mapper.Map<IEnumerable<UserCalendarDto>>(userCalendarList);
-
             // ✅ KHỞI TẠO KẾT QUẢ CHO TẤT CẢ USERS TRƯỚC
             var result = new List<CalendarUserKpiDto>();
 
