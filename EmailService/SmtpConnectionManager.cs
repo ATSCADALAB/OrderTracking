@@ -28,11 +28,43 @@ namespace EmailService
             _cleanupTimer = new Timer(CleanupConnections, null, TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(10));
         }
 
+        //public async Task<SmtpClient> GetConnectionAsync()
+        //{
+        //    await _semaphore.WaitAsync();
+
+        //    // Thử lấy connection có sẵn
+        //    while (_connections.TryDequeue(out var existingClient))
+        //    {
+        //        if (existingClient.IsConnected)
+        //        {
+        //            return existingClient;
+        //        }
+        //        else
+        //        {
+        //            existingClient.Dispose();
+        //        }
+        //    }
+
+        //    // ✅ SỬA LỖI: Declare client bên ngoài try block
+        //    SmtpClient newClient = new SmtpClient();
+        //    try
+        //    {
+        //        await newClient.ConnectAsync(_config.SmtpServer, _config.Port, true);
+        //        newClient.AuthenticationMechanisms.Remove("XOAUTH2");
+        //        await newClient.AuthenticateAsync(_config.UserName, _config.Password);
+        //        return newClient;
+        //    }
+        //    catch
+        //    {
+        //        _semaphore.Release();
+        //        newClient?.Dispose();
+        //        throw;
+        //    }
+        //}
         public async Task<SmtpClient> GetConnectionAsync()
         {
             await _semaphore.WaitAsync();
 
-            // Thử lấy connection có sẵn
             while (_connections.TryDequeue(out var existingClient))
             {
                 if (existingClient.IsConnected)
@@ -45,10 +77,34 @@ namespace EmailService
                 }
             }
 
-            // ✅ SỬA LỖI: Declare client bên ngoài try block
             SmtpClient newClient = new SmtpClient();
             try
             {
+                // ✅ CHỈ BỎ QUA KIỂM TRA REVOCATION, VẪN KIỂM TRA CHỨNG CHỈ
+                newClient.ServerCertificateValidationCallback = (sender, certificate, chain, sslPolicyErrors) =>
+                {
+                    // Bỏ qua lỗi revocation nhưng vẫn kiểm tra các lỗi khác
+                    if (sslPolicyErrors == System.Net.Security.SslPolicyErrors.None)
+                        return true;
+
+                    // Chấp nhận nếu chỉ có lỗi revocation
+                    if (sslPolicyErrors == System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors)
+                    {
+                        foreach (var status in chain.ChainStatus)
+                        {
+                            // Chỉ bỏ qua lỗi revocation
+                            if (status.Status != System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown &&
+                                status.Status != System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.OfflineRevocation)
+                            {
+                                return false;
+                            }
+                        }
+                        return true;
+                    }
+
+                    return false;
+                };
+
                 await newClient.ConnectAsync(_config.SmtpServer, _config.Port, true);
                 newClient.AuthenticationMechanisms.Remove("XOAUTH2");
                 await newClient.AuthenticateAsync(_config.UserName, _config.Password);
@@ -61,7 +117,6 @@ namespace EmailService
                 throw;
             }
         }
-
         public void ReturnConnection(SmtpClient client)
         {
             if (client?.IsConnected == true)

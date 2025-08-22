@@ -177,7 +177,7 @@ namespace Service
                             continue;
 
                         // Extract order code từ summary
-                        var match = System.Text.RegularExpressions.Regex.Match(evt.Summary, @"^(DH\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        var match = System.Text.RegularExpressions.Regex.Match(evt.Summary, @"^(DH\d+(?:-[^-_]+)?)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                         if (match.Success)
                         {
                             orderCodes.Add(match.Groups[1].Value.ToUpper());

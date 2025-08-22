@@ -14,5 +14,8 @@ namespace Shared.DataTransferObjects.CalendarReport
         public DateTime QCDay { get; init; }
         public int EventDays { get; init; }
         public int Stars { get; init; }
+        public int OvertimeDays { get; set; }
+        public decimal PC { get; set; }
+        public List<DateTime> OvertimeDates { get; set; } = new List<DateTime>();
     }
 }

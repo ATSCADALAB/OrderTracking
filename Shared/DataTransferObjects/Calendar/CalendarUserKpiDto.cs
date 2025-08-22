@@ -11,5 +11,7 @@ namespace Shared.DataTransferObjects.CalendarReport
         public double TotalPenalty { get; set; } // Thêm tổng penalty từ PB
         public double RewardOrPenalty { get; set; }
         public string PenaltyDetails { get; set; } = string.Empty; // Thêm chi tiết penalty
+        public int OvertimeDays { get; set; } // Số ngày tăng ca
+        public string OvertimeDetails { get; set; } // Chi tiết ngày tăng ca
     }
 }

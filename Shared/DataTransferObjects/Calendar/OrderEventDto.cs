@@ -23,5 +23,6 @@ namespace Shared.DataTransferObjects.CalendarReport
         public DateTime Date { get; set; }
         public string Description { get; set; }
         public string Status { get; set; }  // [v], [x], hoặc trống
+        public bool IsOvertime { get; set; }
     }
 }
