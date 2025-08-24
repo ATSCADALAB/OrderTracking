@@ -178,10 +178,10 @@ app.UseEndpoints(endpoints =>
 });
 
 app.UseSwagger();
-//app.UseSwaggerUI(s =>
-//{
-//    s.SwaggerEndpoint("/swagger/v1/swagger.json", "Matech Coding API v1");
-//});
+app.UseSwaggerUI(s =>
+{
+    s.SwaggerEndpoint("/swagger/v1/swagger.json", "Matech Coding API v1");
+});
 
 app.Use(next => context =>
 {
